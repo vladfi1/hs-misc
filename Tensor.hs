@@ -6,7 +6,7 @@ module Tensor where
 
 import Data.Vinyl
 import Nats
-import List
+import Vec
 import Zippable
 
 type Dim = Rec SNat
@@ -22,7 +22,7 @@ instance (ReifyDim dim, ReifyNat n) => ReifyDim (n ': dim) where
 
 data Tensor dim a where
   ZTensor :: a -> Tensor '[] a
-  STensor :: List n (Tensor dim a) -> Tensor (n ': dim) a
+  STensor :: Vec n (Tensor dim a) -> Tensor (n ': dim) a
 
 instance Functor (Tensor dim) where
   fmap f (ZTensor a) = ZTensor (f a)
@@ -34,7 +34,7 @@ instance Zippable (Tensor dim) where
 
 fill :: Dim dim -> a -> Tensor dim a
 fill RNil = ZTensor
-fill (n :& dims) = STensor . List.replicate n . fill dims
+fill (n :& dims) = STensor . Vec.replicate n . fill dims
 
 instance ReifyDim dim => Applicative (Tensor dim) where
   pure = fill dim
