@@ -128,3 +128,11 @@ nPred _ = Proxy
 nSucc :: proxy n -> Proxy (S n)
 nSucc _ = Proxy
 
+data LTE n where
+  ZLTE :: LTE n
+  SLTE :: LTE n -> LTE (S n)
+
+data LT n where
+  ZLT :: LT (S n)
+  SLT :: LT n -> LT (S n)
+

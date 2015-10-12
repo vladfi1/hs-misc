@@ -11,6 +11,10 @@ data Vec n a where
   Nil :: Vec Z a
   Cons :: a -> Vec n a -> Vec (S n) a
 
+index :: LT n -> Vec n a -> a
+index ZLT (Cons a _) = a
+index (SLT n) (Cons _ l) = index n l
+
 instance Functor (Vec n) where
   fmap f Nil = Nil
   fmap f (Cons a l) = Cons (f a) (fmap f l)
@@ -18,6 +22,10 @@ instance Functor (Vec n) where
 instance Foldable (Vec n) where
   foldr f b Nil = b
   foldr f b (Cons a l) = f a (foldr f b l)
+
+instance Traversable (Vec n) where
+  sequenceA Nil = pure Nil
+  sequenceA (Cons a l) = Cons <$> a <*> sequenceA l
 
 replicate :: SNat n -> a -> Vec n a
 replicate SZ _ = Nil
