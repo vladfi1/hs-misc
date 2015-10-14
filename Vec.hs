@@ -22,6 +22,9 @@ instance Functor (Vec n) where
 instance Foldable (Vec n) where
   foldr f b Nil = b
   foldr f b (Cons a l) = f a (foldr f b l)
+  
+  foldl f b Nil = b
+  foldl f b (Cons a l) = foldl f (f b a) l
 
 instance Traversable (Vec n) where
   sequenceA Nil = pure Nil

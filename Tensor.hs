@@ -26,7 +26,18 @@ data Tensor dim a where
 
 instance Functor (Tensor dim) where
   fmap f (ZTensor a) = ZTensor (f a)
-  fmap f (STensor l) = STensor (fmap (fmap f) l)
+  fmap f (STensor v) = STensor (fmap (fmap f) v)
+
+instance Foldable (Tensor dim) where
+  foldr f b (ZTensor a) = f a b
+  foldr f b (STensor v) = foldr (flip $ foldr f) b v
+  
+  foldl f b (ZTensor a) = f b a
+  foldl f b (STensor v) = foldl (foldl f) b v
+
+instance Traversable (Tensor dim) where
+  sequenceA (ZTensor a) = ZTensor <$> a
+  sequenceA (STensor v) = STensor <$> traverse sequenceA v
 
 instance Zippable (Tensor dim) where
   ZTensor f <**> ZTensor a = ZTensor (f a)
@@ -40,5 +51,4 @@ instance ReifyDim dim => Applicative (Tensor dim) where
   pure = fill dim
   (<*>) = (<**>)
 
-
-
+--mv (STensor v) t = fmap () vec
