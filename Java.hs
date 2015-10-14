@@ -114,6 +114,11 @@ type family Codes xs where
   Codes '[] = '[]
   Codes (x ': xs) = Code x ': Codes xs
 
-complete :: Dict (All' (Find AllTypes) (Codes GenericTypes))
+type family All3 (c :: k -> Constraint) (ks :: [[[k]]]) :: Constraint where
+  All3 c '[] = ()
+  All3 c (kss ': ksss) = (All2 c kss, All3 c ksss)
+
+--complete :: Dict (All2 (Find AllTypes) (TypeLevel.Concat (Codes GenericTypes)))
+complete :: Dict (All3 (Find AllTypes) (Codes GenericTypes))
 complete = Dict
 
