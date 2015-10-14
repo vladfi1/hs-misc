@@ -15,7 +15,7 @@ type instance FoldR f end (e ': l) = f e (FoldR f end l)
 
 type xs :++: ys = FoldR '(:) ys xs
 
-type family Concat (xss :: [[k]]) where
+type family Concat (xss :: [[k]]) :: [k] where
   Concat '[] = '[]
   Concat (xs ': xss) = xs :++: (Concat xss)
 
