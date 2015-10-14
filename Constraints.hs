@@ -20,9 +20,9 @@ transitivity ab bc = Sub $ sub ab $ sub bc Dict
 
 newtype Forall c = Forall (forall a. Dict (c a))
 
-class All a
-instance All a
+class Trivial a
+instance Trivial a
 
-all :: Forall All
+all :: Forall Trivial
 all = Forall Dict
 
