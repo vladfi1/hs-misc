@@ -30,7 +30,7 @@ instance Functor (Tensor dim) where
 
 instance Zippable (Tensor dim) where
   ZTensor f <**> ZTensor a = ZTensor (f a)
-  (STensor fs) <**> (STensor as) = STensor ((<**>) <$> fs <**> as)
+  STensor fs <**> STensor as = STensor ((<**>) <$> fs <**> as)
 
 fill :: Dim dim -> a -> Tensor dim a
 fill RNil = ZTensor
@@ -39,4 +39,6 @@ fill (n :& dims) = STensor . Vec.replicate n . fill dims
 instance ReifyDim dim => Applicative (Tensor dim) where
   pure = fill dim
   (<*>) = (<**>)
+
+
 
