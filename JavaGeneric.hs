@@ -18,20 +18,13 @@ import TypeLevel
 import List
 --  import Language.Haskell.TH
 
-type NoConstraint = (() :: Constraint)
-
-type family All' (c :: a -> Constraint) (x :: k) :: Constraint where
-  All' c x = c x
-  All' c '[] = ()
-  All' c (x ': xs) = (All' c x, All' c xs)
-
 -- use a type family to break the cyclic class
 -- also to do case analysis on the type
-type family AllGeneric' x where
-  AllGeneric' Char = NoConstraint
-  AllGeneric' Int = NoConstraint
-  AllGeneric' Double = NoConstraint
-  AllGeneric' Integer = NoConstraint
+type family AllGeneric' x :: Constraint where
+  AllGeneric' Char = ()
+  AllGeneric' Int = ()
+  AllGeneric' Double = ()
+  AllGeneric' Integer = ()
   AllGeneric' x = (Generic x, All2 AllGeneric (Code x))
 
 class AllGeneric' x => AllGeneric x
