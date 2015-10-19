@@ -44,7 +44,22 @@ instance (ReifyNat n) => Applicative (Vec n) where
   pure = replicate nat
   (<*>) = (<**>)
 
-appendVec :: Vec n a -> Vec m a -> Vec (n :+: m) a
-appendVec VNil v = v
-appendVec (VCons a v1) v2 = VCons a (appendVec v1 v2)
+instance Show a => Show (Vec n a) where
+  show = show . toList
+
+append :: Vec n a -> Vec m a -> Vec (n :+: m) a
+append VNil v = v
+append (VCons a v1) v2 = VCons a (append v1 v2)
+
+fromList :: SNat n -> [a] -> Maybe (Vec n a)
+fromList SZ [] = Just VNil
+fromList (SS n) (a : as) = VCons a <$> fromList n as
+fromList _ _ = Nothing
+
+lookup :: Eq a => a -> Vec n a -> Maybe (LT n)
+lookup _ VNil = Nothing
+lookup a (VCons h t) =
+  if a == h
+    then Just ZLT
+    else SLT <$> Vec.lookup a t
 
