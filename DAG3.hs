@@ -36,7 +36,7 @@ return = Place
 var = Place
 let_ a f = Roll $ Let a f
 (>>=) = let_
-node = Roll . Node
+node = Roll . Node . map var
 fail = undefined
 
 empty = node []
@@ -44,7 +44,7 @@ empty = node []
 dag = do
   a <- empty
   b <- empty
-  c <- node [var a, var b]
-  d <- node [var a, var b]
-  node [var c, var d]
+  c <- node [a, b]
+  d <- node [a, b]
+  node [c, d]
 
