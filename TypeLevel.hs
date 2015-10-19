@@ -20,6 +20,7 @@ type family Concat (xss :: [[k]]) :: [k] where
   Concat (xs ': xss) = xs :++: (Concat xss)
 
 -- Undecidable instances?
+-- ghc can't tell that FoldL is decreasing in its last argument
 type family FoldL (f :: b -> a -> b) (acc :: b) (l :: [a]) :: b
 type instance FoldL f acc '[] = acc
 type instance FoldL f acc (e ': l) = FoldL f (f acc e) l
@@ -28,6 +29,8 @@ type family If (pred :: Bool) (a :: t) (b :: t) :: t where
   If False a b = b
   If True a b = a
 
+-- kind-indexed
+-- no way relate the kinds of the inputs and output
 type family FMap (f :: a -> b) (c :: fa) :: fb where
   FMap f l = Map f l
   FMap f Nothing = Nothing
