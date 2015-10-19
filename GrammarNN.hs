@@ -37,13 +37,16 @@ class Neural a where
 
 -- need to postpone applying the dimension
 newtype Repr a dim = Repr { runRepr :: Tensor '[dim] a }
+  deriving (Show)
 
 newtype Linear a outDim inDim = Linear (Tensor '[outDim, inDim] a)
+  deriving (Show)
 
 linear :: Num a => Linear a outDim inDim -> Repr a inDim -> Tensor '[outDim] a
 linear (Linear m) (Repr v) = mv m v
 
 data Affine a outDim inDims = Affine (Tensor '[outDim] a) (NP (Linear a outDim) inDims)
+  deriving (Show)
 
 affine :: Num a => Affine a outDim inDims -> NP (Repr a) inDims -> Tensor '[outDim] a
 affine (Affine bias weights) inputs =
