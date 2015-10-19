@@ -11,6 +11,8 @@ class Functor f => Zippable f where
   default (<**>) :: Applicative f => f (a -> b) -> f a -> f b
   (<**>) = (<*>)
 
+instance Zippable []
+
 zipWith :: Zippable f => (a -> b -> c) -> f a -> f b -> f c
 zipWith f fa fb = f <$> fa <**> fb
   
