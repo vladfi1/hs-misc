@@ -7,6 +7,8 @@ module Vec where
 import Prelude hiding (replicate, reverse, concat)
 import Zippable
 import Nats
+import Data.Default
+import Data.Foldable (toList)
 
 data Vec n a where
   VNil :: Vec Z a
@@ -46,6 +48,9 @@ instance (ReifyNat n) => Applicative (Vec n) where
 
 instance Show a => Show (Vec n a) where
   show = show . toList
+
+instance (ReifyNat n, Default a) => Default (Vec n a) where
+  def = pure def
 
 append :: Vec n a -> Vec m a -> Vec (n :+: m) a
 append VNil v = v

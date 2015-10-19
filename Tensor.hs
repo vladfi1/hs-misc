@@ -4,6 +4,8 @@
 
 module Tensor where
 
+import Data.Default
+
 import Data.Vinyl
 import Nats
 import Vec
@@ -54,6 +56,9 @@ instance ReifyDim dim => Applicative (Tensor dim) where
 instance Show a => Show (Tensor dim a) where
   show (ZTensor a) = show a
   show (STensor v) = show v
+
+instance (ReifyDim dim, Default a) => Default (Tensor dim a) where
+  def = pure def
 
 fromVec :: Vec n a -> Tensor '[n] a
 fromVec v = STensor $ fmap ZTensor v
