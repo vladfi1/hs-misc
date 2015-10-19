@@ -3,10 +3,13 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module List where
 
 import Data.Vinyl
+import Data.Type.Equality
+import Nats
 
 data SList l where
   SNil :: SList '[]
@@ -36,6 +39,7 @@ concatNil SNil = FoldRNil
 concatNil (SCons l) = FoldRCons (concatNil l)
 
 --concatAssociative :: Concat s l sl -> Concat sl r slr -> Concat l r lr -> Concat s lr slr
+--concatAssociative FoldRNil _ _ = FoldRNil
 
 data FoldL :: (b -> a -> b) -> b -> [a] -> b -> * where
   FoldLNil :: FoldL f b '[] b
@@ -65,6 +69,13 @@ index :: Index l a -> Rec f l -> f a
 index ZIndex (a :& _) = a
 index (SIndex i) (_ :& l) = index i l
 
+instance TestEquality (Index l) where
+  testEquality ZIndex ZIndex = Just Refl
+  testEquality (SIndex i) (SIndex j) = do
+    Refl <- testEquality i j
+    return Refl
+  testEquality _ _ = Nothing
+
 indices :: Rec f l -> Rec (Index l) l
 indices RNil = RNil
 indices (a :& l) = ZIndex :& rmap SIndex (indices l)
@@ -85,4 +96,12 @@ rZipWith f (fa :& fl) (ga :& gl) = f fa ga :& rZipWith f fl gl
 data Length (l :: [k]) where
   LZero :: Length '[]
   LSucc :: Length l -> Length (a ': l)
+
+type family Len (l :: [k]) :: Nat where
+  Len '[] = Nats.Z
+  Len (a ': l) = Nats.S (Len l)
+
+reifyLen :: SList l -> SNat (Len l)
+reifyLen List.SNil = SZ
+reifyLen (List.SCons l) = SS $ reifyLen l
 
