@@ -51,14 +51,18 @@ instance ReifyDim dim => Applicative (Tensor dim) where
   pure = fill dim
   (<*>) = (<**>)
 
+instance Show a => Show (Tensor dim a) where
+  show (ZTensor a) = show a
+  show (STensor v) = show v
+
 fromVec :: Vec n a -> Tensor '[n] a
 fromVec v = STensor $ fmap ZTensor v
 
 toVec :: Tensor '[n] a -> Vec n a
 toVec (STensor v) = fmap (\(ZTensor a) -> a) v
 
-appendTensor :: Tensor (n ': dim) a -> Tensor (m ': dim) a -> Tensor (n :+: m ': dim) a
-appendTensor (STensor n) (STensor m) = STensor $ appendVec n m
+append :: Tensor (n ': dim) a -> Tensor (m ': dim) a -> Tensor (n :+: m ': dim) a
+append (STensor n) (STensor m) = STensor $ Vec.append n m
 
 dot a b = foldl (+) 0 $ (*) <$> a <**> b
 
