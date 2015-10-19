@@ -52,6 +52,10 @@ type family (x :: Nat) :+: (y :: Nat) :: Nat where
   Z :+: x = x
   (S x) :+: y = S (x :+: y)
 
+type family Sum (xs :: [Nat]) :: Nat where
+  Sum '[] = Z
+  Sum (x ': xs) = x :+: (Sum xs)
+
 infixl 6 :-:
 type family (x :: Nat) :-: (y :: Nat) :: Nat where
   Z :-: x = Z
@@ -96,7 +100,7 @@ type family ToNat (n :: TL.Nat) :: Nat where
 
 data SNat (n :: Nat) where
   SZ :: SNat Z
-  SS :: (ReifyNat n) => SNat n -> SNat (S n)
+  SS :: SNat n -> SNat (S n)
 
 class ReifyNat (n :: Nat) where
   nat :: SNat n
