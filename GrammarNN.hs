@@ -1,10 +1,11 @@
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds, PolyKinds, ConstraintKinds #-}
-{-# LANGUAGE FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables, InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module GrammarNN where
 
@@ -19,6 +20,8 @@ import Zippable
 import Generics.SOP.NP
 import Generics.SOP.NS
 import Data.Vinyl
+
+import Data.Default
 
 import Prelude hiding (zipWith)
 
@@ -40,7 +43,7 @@ newtype Repr a dim = Repr { runRepr :: Tensor '[dim] a }
   deriving (Show)
 
 newtype Linear a outDim inDim = Linear (Tensor '[outDim, inDim] a)
-  deriving (Show)
+  deriving (Show, Default)
 
 linear :: Num a => Linear a outDim inDim -> Repr a inDim -> Tensor '[outDim] a
 linear (Linear m) (Repr v) = mv m v
@@ -48,10 +51,27 @@ linear (Linear m) (Repr v) = mv m v
 data Affine a outDim inDims = Affine (Tensor '[outDim] a) (NP (Linear a outDim) inDims)
   deriving (Show)
 
+instance (Default a, SingI inDims, ReifyNat outDim, All ReifyNat inDims) => Default (Affine a outDim inDims) where
+  def = Affine def (cpure_NP (Proxy::Proxy ReifyNat) def)
+
 affine :: Num a => Affine a outDim inDims -> NP (Repr a) inDims -> Tensor '[outDim] a
 affine (Affine bias weights) inputs =
   foldr (zipWith (+)) bias (map runRepr . collapse_NP $ liftA2_NP' linear' weights inputs)
   where linear' m v = K $ Repr $ linear m v
+
+-- like liftA_NP but without the SingI xs constraint
+liftA_NP' :: (forall a. f a -> g a) -> NP f xs -> NP g xs
+liftA_NP' _ Nil = Nil
+liftA_NP' f (fx :* fxs) = f fx :* liftA_NP' f fxs
+
+-- like liftA2_NS but without the SingI xs constraint
+liftA_NS' :: (forall a. f a -> g a) -> NS f xs -> NS g xs
+liftA_NS' f (SOP.Z fx) = SOP.Z (f fx)
+liftA_NS' f (SOP.S fxs) = SOP.S (liftA_NS' f fxs)
+
+-- like liftA_SOP but without the SingI xs constraint
+liftA_SOP' :: (forall a. f a -> g a) -> SOP f xss -> SOP g xss
+liftA_SOP' f (SOP sop) = SOP (liftA_NS' (liftA_NP' f) sop)
 
 -- like liftA2_NP but without the SingI xs constraint
 liftA2_NP' :: (forall a. f a -> g a -> h a) -> NP f xs -> NP g xs -> NP h xs
@@ -62,6 +82,9 @@ liftA2_NP' f (x :* xs) (y :* ys) = f x y :* liftA2_NP' f xs ys
 liftA2_NS' :: forall f g h xs. (forall a. f a -> g a -> h a) -> NP f xs -> NS g xs -> NS h xs
 liftA2_NS' f (fx :* _) (SOP.Z gx) = SOP.Z (f fx gx)
 liftA2_NS' f (_ :* fxs) (SOP.S gxs) = SOP.S (liftA2_NS' f fxs gxs)
+
+collapse_SOP' :: SOP (K a) xs -> [a]
+collapse_SOP' (SOP sop) = collapse_NS $ liftA_NS' (K . collapse_NP) sop
 
 type family MapSize ts where
   MapSize '[] = '[]
@@ -85,6 +108,10 @@ data Encoding a t where
   Primitive :: Neural t => Repr a (Size t) -> Encoding a t
   Generic :: (Neural t, Generic t) => Repr a (Size t) -> SOP (Encoding a) (Code t) -> Encoding a t
 
+instance Show a => Show (Encoding a t) where
+  show (Primitive repr) = show repr
+  show (Generic repr children) = show $ collapse_SOP' $ liftA_SOP' (K . show) children
+
 getRepr :: Encoding a t -> Repr a (Size t)
 getRepr (Primitive repr) = repr
 getRepr (Generic repr _) = repr
@@ -107,6 +134,18 @@ oneHot'
 -}
 
 newtype EncodeParams a t = EncodeParams (NP (Affine a (Size t)) (MapSize2 (Code t)))
+  deriving (Show)
+
+-- should be able to just use SingI here?
+-- would have to write out the proof SingI dims -> All ReifyNat dims
+class (SingI dims, All ReifyNat dims) => Blah dims
+instance (SingI dims, All ReifyNat dims) => Blah dims
+
+class (Neural t, Generic t, ReifyNat (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
+instance (Neural t, Generic t, ReifyNat (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
+
+instance (Default a, HasParams t) => Default (EncodeParams a t) where
+  def = EncodeParams $ cpure_NP (Proxy::Proxy Blah) def
 
 class Encode ts t where
   encode :: Floating a => NP (EncodeParams a) ts -> t -> Encoding a t
