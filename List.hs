@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds, PolyKinds #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -10,19 +10,16 @@ module List where
 import Data.Vinyl
 import Data.Type.Equality
 import Nats
+import Generics.SOP.Sing
 
 data SList l where
-  SNil :: SList '[]
-  SCons :: SList l -> SList (a ': l)
+  SNil' :: SList '[]
+  SCons' :: Sing a -> SList l -> SList (a ': l)
 
-class ReifyList l where
-  sList :: SList l
-
-instance ReifyList '[] where
-  sList = SNil
-
-instance ReifyList l => ReifyList (a ': l) where
-  sList = SCons sList
+slist :: forall l. SingI l => SList l
+slist = case sing :: Sing l of
+  SNil -> SNil'
+  SCons -> SCons' sing slist
 
 data Map f l r where
   MapNil :: Map f '[] '[]
@@ -35,8 +32,8 @@ data FoldR f b l r where
 type Concat s l = FoldR '(:) l s
 
 concatNil :: SList l -> Concat l '[] l
-concatNil SNil = FoldRNil
-concatNil (SCons l) = FoldRCons (concatNil l)
+concatNil SNil' = FoldRNil
+concatNil (SCons' _ l) = FoldRCons (concatNil l)
 
 --concatAssociative :: Concat s l sl -> Concat sl r slr -> Concat l r lr -> Concat s lr slr
 --concatAssociative FoldRNil _ _ = FoldRNil
@@ -102,6 +99,6 @@ type family Len (l :: [k]) :: Nat where
   Len (a ': l) = Nats.S (Len l)
 
 reifyLen :: SList l -> SNat (Len l)
-reifyLen List.SNil = SZ
-reifyLen (List.SCons l) = SS $ reifyLen l
+reifyLen SNil' = SZ
+reifyLen (SCons' _ l) = SS $ reifyLen l
 
