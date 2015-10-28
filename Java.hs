@@ -31,6 +31,7 @@ import TypeLevel
 import Vec
 import Nats
 import Tensor
+import Utils
 
 data SList xs where
   SNil' :: SList '[]
@@ -53,10 +54,8 @@ instance Neural Char where
 instance {-# OVERLAPPABLE #-} Neural t where
   type Size t = ToNat 95
 
---class HasParams t
-
-initialParams :: (Default a) => NP (EncodeParams a) GenericTypes
-initialParams = cpure_NP (Proxy::Proxy HasParams) def
+initialParams :: (Default a) => FlipNP EncodeParams GenericTypes a
+initialParams = FlipNP $ cpure_NP (Proxy::Proxy HasParams) def
 
 newtype Params ts a = Params (NP (EncodeParams a) ts)
 

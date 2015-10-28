@@ -5,21 +5,23 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables, InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 
 module GrammarNN where
 
-import Data.Constraint
-import List
 import Generics.SOP
+import Generics.SOP.NP
+import Generics.SOP.NS
 import qualified Generics.SOP as SOP
+--import Data.Vinyl
+
+import Constraints
+import Utils
+import List
 import Tensor
 import Nats
 import TypeLevel
 import Zippable
-import Generics.SOP.NP
-import Generics.SOP.NS
-import Data.Vinyl
 
 import Data.Default
 
@@ -38,53 +40,57 @@ type family All3 (c :: k -> Constraint) (ksss :: [[[k]]]) :: Constraint where
 class Neural a where
   type Size a :: Nat
 
+--foldrFlipNP :: Forall (CompC Foldable f) -> 
+
 -- need to postpone applying the dimension
-newtype Repr a dim = Repr { runRepr :: Tensor '[dim] a }
-  deriving (Show)
+newtype Repr dim a = Repr { runRepr :: Tensor '[dim] a }
+  deriving (Show, Functor, Foldable, Traversable)
 
-newtype Linear a outDim inDim = Linear (Tensor '[outDim, inDim] a)
-  deriving (Show, Default)
+instance ForallC (CompC Functor Repr) where
+  forallC = Forall Dict
 
-linear :: Num a => Linear a outDim inDim -> Repr a inDim -> Tensor '[outDim] a
+instance ForallC (CompC Foldable Repr) where
+  forallC = Forall Dict
+
+instance ForallC (CompC Traversable Repr) where
+  forallC = Forall Dict
+
+newtype Linear outDim inDim a = Linear (Tensor '[outDim, inDim] a)
+  deriving (Show, Default, Functor, Foldable, Traversable)
+
+instance ForallC (CompC Functor (Linear outDim)) where
+  forallC = Forall Dict
+
+instance ForallC (CompC Foldable (Linear outDim)) where
+  forallC = Forall Dict
+
+instance ForallC (CompC Traversable (Linear outDim)) where
+  forallC = Forall Dict
+
+linear :: Num a => Linear outDim inDim a -> Repr inDim a -> Tensor '[outDim] a
 linear (Linear m) (Repr v) = mv m v
 
-data Affine a outDim inDims = Affine (Tensor '[outDim] a) (NP (Linear a outDim) inDims)
-  deriving (Show)
+data Affine outDim inDims a = Affine (Tensor '[outDim] a) (FlipNP (Linear outDim) inDims a)
+  deriving (Functor, Foldable, Traversable)
 
-instance (Default a, SingI inDims, ReifyNat outDim, All ReifyNat inDims) => Default (Affine a outDim inDims) where
-  def = Affine def (cpure_NP (Proxy::Proxy ReifyNat) def)
+--deriving instance (AllC (CompC Show (Flip (Linear outDim) a)) inDims) => Show (Affine outDim inDims a)
 
-affine :: Num a => Affine a outDim inDims -> NP (Repr a) inDims -> Tensor '[outDim] a
+instance ForallC (CompC Functor (Affine outDim)) where
+  forallC = Forall Dict
+
+instance ForallC (CompC Foldable (Affine outDim)) where
+  forallC = Forall Dict
+
+instance ForallC (CompC Traversable (Affine outDim)) where
+  forallC = Forall Dict
+
+instance (Default a, SingI inDims, SingI outDim, All SingI inDims) => Default (Affine outDim inDims a) where
+  def = Affine def (FlipNP $ cpure_NP (Proxy::Proxy SingI) def)
+
+affine :: Num a => Affine outDim inDims a -> FlipNP Repr inDims a -> Tensor '[outDim] a
 affine (Affine bias weights) inputs =
-  foldr (zipWith (+)) bias (map runRepr . collapse_NP $ liftA2_NP' linear' weights inputs)
-  where linear' m v = K $ Repr $ linear m v
-
--- like liftA_NP but without the SingI xs constraint
-liftA_NP' :: (forall a. f a -> g a) -> NP f xs -> NP g xs
-liftA_NP' _ Nil = Nil
-liftA_NP' f (fx :* fxs) = f fx :* liftA_NP' f fxs
-
--- like liftA2_NS but without the SingI xs constraint
-liftA_NS' :: (forall a. f a -> g a) -> NS f xs -> NS g xs
-liftA_NS' f (SOP.Z fx) = SOP.Z (f fx)
-liftA_NS' f (SOP.S fxs) = SOP.S (liftA_NS' f fxs)
-
--- like liftA_SOP but without the SingI xs constraint
-liftA_SOP' :: (forall a. f a -> g a) -> SOP f xss -> SOP g xss
-liftA_SOP' f (SOP sop) = SOP (liftA_NS' (liftA_NP' f) sop)
-
--- like liftA2_NP but without the SingI xs constraint
-liftA2_NP' :: (forall a. f a -> g a -> h a) -> NP f xs -> NP g xs -> NP h xs
-liftA2_NP' _ Nil Nil = Nil
-liftA2_NP' f (x :* xs) (y :* ys) = f x y :* liftA2_NP' f xs ys
-
--- like liftA2_NS but without the SingI xs constraint
-liftA2_NS' :: forall f g h xs. (forall a. f a -> g a -> h a) -> NP f xs -> NS g xs -> NS h xs
-liftA2_NS' f (fx :* _) (SOP.Z gx) = SOP.Z (f fx gx)
-liftA2_NS' f (_ :* fxs) (SOP.S gxs) = SOP.S (liftA2_NS' f fxs gxs)
-
-collapse_SOP' :: SOP (K a) xs -> [a]
-collapse_SOP' (SOP sop) = collapse_NS $ liftA_NS' (K . collapse_NP) sop
+  foldl (zipWith (+)) bias (map runRepr . collapse_FNP $ liftA2_FNP linear' weights inputs)
+  where linear' m v = FK $ Repr $ linear m v
 
 type family MapSize ts where
   MapSize '[] = '[]
@@ -99,86 +105,81 @@ type family MapSum dimss where
   MapSum (dims ': dimss) = Sum dims ': MapSum dimss
 
 encodeParent :: (Floating a) =>
-  NP (Affine a outDim) inDims -> SOP (Repr a) inDims -> Repr a outDim
+  FlipNP (Affine outDim) inDims a -> FlipSOP Repr inDims a -> Repr outDim a
 
-encodeParent params (SOP sop) = Repr $ tanh <$> (collapse_NS $ liftA2_NS' affine' params sop)
-  where affine' p i = K $ affine p i
+encodeParent params (FlipSOP sop) = Repr $ tanh <$> (collapse_FNS $ liftA2_FNS affine' params sop)
+  where affine' p i = FK $ affine p i
 
-data Encoding a t where
-  Primitive :: Neural t => Repr a (Size t) -> Encoding a t
-  Generic :: (Neural t, Generic t) => Repr a (Size t) -> SOP (Encoding a) (Code t) -> Encoding a t
+data Encoding t a where
+  Primitive :: Neural t => Repr (Size t) a -> Encoding t a
+  Generic :: (Neural t, Generic t) => Repr (Size t) a -> FlipSOP Encoding (Code t) a -> Encoding t a
 
-instance Show a => Show (Encoding a t) where
+instance Show a => Show (Encoding t a) where
   show (Primitive repr) = show repr
-  show (Generic repr children) = show $ collapse_SOP' $ liftA_SOP' (K . show) children
+  show (Generic repr children) = showAsList . map unK . collapse_FSOP $ liftA_FSOP (FK . K . show) children
 
-getRepr :: Encoding a t -> Repr a (Size t)
+getRepr :: Encoding t a -> Repr (Size t) a
 getRepr (Primitive repr) = repr
 getRepr (Generic repr _) = repr
 
 -- no way to write these with combinators?
-getReprNP :: NP (Encoding a) ts -> NP (Repr a) (MapSize ts)
-getReprNP Nil = Nil
-getReprNP (e :* es) = getRepr e :* getReprNP es
+getReprNP' :: NP (Flip Encoding a) ts -> NP (Flip Repr a) (MapSize ts)
+getReprNP' Nil = Nil
+getReprNP' (Flip e :* es) = Flip (getRepr e) :* getReprNP' es
 
-getReprSOP' :: NS (NP (Encoding a)) ts -> NS (NP (Repr a)) (MapSize2 ts)
-getReprSOP' (SOP.Z es) = SOP.Z $ getReprNP es
-getReprSOP' (SOP.S es) = SOP.S $ getReprSOP' es
+getReprNP :: FlipNP Encoding ts a -> FlipNP Repr (MapSize ts) a
+getReprNP (FlipNP np) = FlipNP $ getReprNP' np
 
-getReprSOP :: SOP (Encoding a) ts -> SOP (Repr a) (MapSize2 ts)
-getReprSOP (SOP sop) = SOP $ getReprSOP' sop
+getReprSOP' :: FlipNS (FlipNP Encoding) ts a -> FlipNS (FlipNP Repr) (MapSize2 ts) a
+getReprSOP' (FlipNS (SOP.S es)) = FlipNS . SOP.S . runFlipNS $ getReprSOP' (FlipNS es)
+getReprSOP' (FlipNS (SOP.Z (Flip es))) = FlipNS . SOP.Z . Flip $ getReprNP es
 
-{-
-oneHot' :: Num a => NS f l -> Vec (Len l) 
-oneHot' 
--}
+getReprSOP :: FlipSOP Encoding ts a -> FlipSOP Repr (MapSize2 ts) a
+getReprSOP (FlipSOP sop) = FlipSOP $ getReprSOP' sop
 
-newtype EncodeParams a t = EncodeParams (NP (Affine a (Size t)) (MapSize2 (Code t)))
-  deriving (Show)
+newtype EncodeParams t a =
+  EncodeParams { runEncodeParams :: FlipNP (Affine (Size t)) (MapSize2 (Code t)) a }
+  deriving (Functor, Foldable, Traversable)
+
+instance ForallC (CompC Foldable EncodeParams) where
+  forallC = Forall Dict
+
+--deriving instance (SingI (MapSize2 (Code t))) => Show (EncodeParams t a)
 
 -- should be able to just use SingI here?
 -- would have to write out the proof SingI dims -> All ReifyNat dims
-class (SingI dims, All ReifyNat dims) => Blah dims
-instance (SingI dims, All ReifyNat dims) => Blah dims
+class (SingI dims, All SingI dims) => Blah dims
+instance (SingI dims, All SingI dims) => Blah dims
 
-class (Neural t, Generic t, ReifyNat (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
-instance (Neural t, Generic t, ReifyNat (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
+class (Neural t, Generic t, SingI (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
+instance (Neural t, Generic t, SingI (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
 
-instance (Default a, HasParams t) => Default (EncodeParams a t) where
-  def = EncodeParams $ cpure_NP (Proxy::Proxy Blah) def
+instance (Default a, HasParams t) => Default (EncodeParams t a) where
+  def = EncodeParams . FlipNP $ cpure_NP (Proxy::Proxy Blah) def
 
 class Encode ts t where
-  encode :: Floating a => NP (EncodeParams a) ts -> t -> Encoding a t
-
---instance Encode Int where
-
--- utilites for conversion between Vinyl and SOP
-rec2NP :: Rec f xs -> NP f xs
-rec2NP RNil = Nil
-rec2NP (fx :& fxs) = fx :* rec2NP fxs
-
-np2Rec :: NP f xs -> Rec f xs
-np2Rec Nil = RNil
-np2Rec (fx :* fxs) = fx :& np2Rec fxs
+  encode :: Floating a => FlipNP EncodeParams ts a -> t -> Encoding t a
 
 instance {-# OVERLAPPABLE #-}
   (SingI (Code t), All2 (Encode ts) (Code t), Generic t, Neural t, Find ts t)
   => Encode ts t where
-  encode :: forall a. Floating a => NP (EncodeParams a) ts -> t -> Encoding a t
-  encode params t = Generic repr $ children
+  encode :: forall a. Floating a => FlipNP EncodeParams ts a -> t -> Encoding t a
+  encode params t = Generic repr children
     where
       {-
       cliftA_SOP' :: forall f g. (forall t'. Encode t' => f t' -> g t') ->
         SOP f (Code t) -> SOP g (Code t)
       -}
       
-      encode' :: (Encode ts t') => I t' -> Encoding a t'
-      encode' (I t') = encode params t'
+      encode' :: forall t'. (Encode ts t') => I t' -> Flip Encoding a t'
+      encode' (I t') = Flip $ encode params t'
 
       cliftA_SOP' = cliftA_SOP (Proxy :: Proxy (Encode ts))
-      children = cliftA_SOP' encode' (from t)
       
-      EncodeParams param = index (find :: Index ts t) (np2Rec params)
+      children :: FlipSOP Encoding (Code t) a
+      children = FlipSOP . FlipNS . (liftA_NS' $ Flip . FlipNP) . unSOP $ cliftA_SOP' encode' (from t)
+      
+      Flip (EncodeParams param) = index (find :: Index ts t) (np2Rec $ runFlipNP params)
       repr = encodeParent param (getReprSOP children)
       --childReprs = liftA_SOP getRepr 
 
