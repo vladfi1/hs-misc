@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Nats where
@@ -10,6 +11,7 @@ module Nats where
 import TypeLevel
 import Data.Proxy
 import qualified GHC.TypeLits as TL
+import Generics.SOP.Sing
 
 data Nat = Z | S Nat
 
@@ -98,9 +100,11 @@ type family ToNat (n :: TL.Nat) :: Nat where
   ToNat 0 = Z
   ToNat n = S (ToNat (n TL.- 1))
 
-data SNat (n :: Nat) where
+type SNat = (Sing :: Nat -> *)
+
+data instance Sing (n :: Nat) where
   SZ :: SNat Z
-  SS :: SNat n -> SNat (S n)
+  SS :: SNat n -> Sing (S n)
 
 class ReifyNat (n :: Nat) where
   nat :: SNat n
@@ -110,6 +114,9 @@ instance ReifyNat Z where
 
 instance (ReifyNat n) => ReifyNat (S n) where
   nat = SS nat
+
+instance ReifyNat n => SingI n where
+  sing = nat
 
 snat2nat :: SNat n -> Nat
 snat2nat SZ = Z
