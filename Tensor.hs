@@ -7,20 +7,10 @@ module Tensor where
 import Data.Default
 
 import Data.Vinyl
+import Generics.SOP.Sing
 import Nats
 import Vec
 import Zippable
-
-type Dim = Rec SNat
-
-class ReifyDim dim where
-  dim :: Dim dim
-
-instance ReifyDim '[] where
-  dim = RNil
-
-instance (ReifyDim dim, ReifyNat n) => ReifyDim (n ': dim) where
-  dim = nat :& dim
 
 data Tensor dim a where
   ZTensor :: a -> Tensor '[] a
@@ -45,19 +35,19 @@ instance Zippable (Tensor dim) where
   ZTensor f <**> ZTensor a = ZTensor (f a)
   STensor fs <**> STensor as = STensor ((<**>) <$> fs <**> as)
 
-fill :: Dim dim -> a -> Tensor dim a
-fill RNil = ZTensor
-fill (n :& dims) = STensor . Vec.replicate n . fill dims
+fill :: Sing dim -> a -> Tensor dim a
+fill SNil = ZTensor
+fill SCons = STensor . Vec.replicate sing . fill sing
 
-instance ReifyDim dim => Applicative (Tensor dim) where
-  pure = fill dim
+instance SingI dim => Applicative (Tensor dim) where
+  pure = fill sing
   (<*>) = (<**>)
 
 instance Show a => Show (Tensor dim a) where
   show (ZTensor a) = show a
   show (STensor v) = show v
 
-instance (ReifyDim dim, Default a) => Default (Tensor dim a) where
+instance (SingI dim, Default a) => Default (Tensor dim a) where
   def = pure def
 
 fromVec :: Vec n a -> Tensor '[n] a

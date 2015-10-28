@@ -104,19 +104,13 @@ type SNat = (Sing :: Nat -> *)
 
 data instance Sing (n :: Nat) where
   SZ :: SNat Z
-  SS :: SNat n -> Sing (S n)
+  SS :: SNat n -> SNat (S n)
 
-class ReifyNat (n :: Nat) where
-  nat :: SNat n
+instance SingI Z where
+  sing = SZ
 
-instance ReifyNat Z where
-  nat = SZ
-
-instance (ReifyNat n) => ReifyNat (S n) where
-  nat = SS nat
-
-instance ReifyNat n => SingI n where
-  sing = nat
+instance (SingI n) => SingI (S n) where
+  sing = SS sing
 
 snat2nat :: SNat n -> Nat
 snat2nat SZ = Z
@@ -125,8 +119,8 @@ snat2nat (SS n) = S (snat2nat n)
 instance Show (SNat n) where
   show = show . fromEnum . snat2nat
 
-snat :: (n' ~ ToNat n, ReifyNat n') => proxy n -> SNat n'
-snat _ = nat
+snat :: (n' ~ ToNat n, SingI n') => proxy n -> SNat n'
+snat _ = sing
 
 zero = SZ
 one = SS zero

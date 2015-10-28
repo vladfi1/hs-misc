@@ -6,6 +6,7 @@ module Vec where
 
 import Prelude hiding (replicate, reverse, concat)
 import Zippable
+import Generics.SOP.Sing
 import Nats
 import Data.Default
 import Data.Foldable (toList)
@@ -42,14 +43,14 @@ instance Zippable (Vec n) where
   VCons f fs <**> VCons a as = VCons (f a) (fs <**> as)
 
 -- ZipVec semantics
-instance (ReifyNat n) => Applicative (Vec n) where
-  pure = replicate nat
+instance (SingI n) => Applicative (Vec n) where
+  pure = replicate sing
   (<*>) = (<**>)
 
 instance Show a => Show (Vec n a) where
   show = show . toList
 
-instance (ReifyNat n, Default a) => Default (Vec n a) where
+instance (SingI n, Default a) => Default (Vec n a) where
   def = pure def
 
 append :: Vec n a -> Vec m a -> Vec (n :+: m) a
