@@ -11,6 +11,7 @@ import Generics.SOP
 import Generics.SOP.TH
 
 import Data.Constraint
+import Constraints
 import List
 import TypeLevel
 
@@ -178,7 +179,9 @@ type family All3 (c :: k -> Constraint) (ksss :: [[[k]]]) :: Constraint where
   All3 c '[] = ()
   All3 c (kss ': ksss) = (All2 c kss, All3 c ksss)
 
---complete :: Dict (All2 (Find AllTypes) (TypeLevel.Concat (Codes GenericTypes)))
-complete :: Dict (All3 (Find AllTypes) (Codes GenericTypes))
+type AllCodes = (TypeLevel.Concat (TypeLevel.Concat (Codes GenericTypes)))
+
+complete :: Dict (All (Find AllTypes) AllCodes)
+--complete :: Dict (All3 (Find AllTypes) (Codes GenericTypes))
 complete = Dict
 
