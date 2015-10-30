@@ -16,6 +16,7 @@ module Constraints
   , CompC
   , ForallC1
   , AllC (..)
+  , All2C, All3C
   , CList (..)
   , module Data.Constraint
   ) where
@@ -84,6 +85,7 @@ instance (c x, AllC c xs) => AllC c (x ': xs) where
   clist = CCons Dict clist
 
 type All2C c = AllC (AllC c)
+type All3C c = AllC (All2C c)
 
 forallImpliesAll :: forall c xs. SList xs -> ForallC c :- AllC c xs
 forallImpliesAll SNil' = Sub Dict
