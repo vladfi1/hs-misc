@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module DAGST where
+module DAGIO where
 
 import Data.IORef
 import Data.STRef
