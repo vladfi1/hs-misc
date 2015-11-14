@@ -2,6 +2,8 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeOperators #-}
+--{-# LANGUAGE TypeInType #-}
 
 module TypeRep where
 
@@ -56,7 +58,6 @@ instance TestEquality TypeRep where
 
 --data KindRep 
 
-{-
 type family Bool' :: k where
   Bool' = Bool
 
@@ -66,26 +67,12 @@ type family Maybe' :: k where
 data TypeRep' :: k -> * where
   BoolRep' :: TypeRep' Bool'
   MaybeRep' :: TypeRep' Maybe'
-  AppRep' :: forall (f :: k1 -> k2) (a :: k1). TypeRep' f -> TypeRep' a -> TypeRep' (f a)
-
-instance TestEquality TypeRep' where
-  testEquality BoolRep' BoolRep' = Just Refl
-  testEquality BoolRep' _ = Nothing
-  
-  testEquality MaybeRep' MaybeRep' = Just Refl
-  testEquality MaybeRep' _ = Nothing
-  
-  testEquality (AppRep' f a) (AppRep' g b) = do
-    Refl <- testEquality f g
-    Refl <- testEquality a b
-    return Refl
--}
-
-
-data TypeRep' (t :: k) where
-  AppRep' :: forall (f :: k1 -> k2) (a :: k1). TypeRep' f -> TypeRep' a -> TypeRep' (f a)
+  AppRep' :: TypeRep' f -> TypeRep' a -> TypeRep' (f a)
 
 {-
+data TypeRep' (t :: k) where
+  AppRep' :: TypeRep' f -> TypeRep' a -> TypeRep' (f a)
+
 instance TestEquality TypeRep' where
   testEquality (AppRep' f a) (AppRep' g b) = do
     Refl <- testEquality f g
