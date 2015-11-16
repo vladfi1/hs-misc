@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module TensorHMatrix where
 
@@ -12,6 +13,8 @@ import Data.Proxy
 import GHC.TypeLits hiding (natVal')
 import Numeric.LinearAlgebra
 import Data.Default
+
+type Usable a = (Element a, Num a, Numeric a, Num (Vector a), Container Vector a)
 
 natVal' :: (KnownNat n, Num a) => proxy n -> a
 natVal' = fromInteger . natVal
@@ -26,10 +29,10 @@ deriving instance (Show a, Element a) => Show (Tensor a dims)
 instance (Default a) => Default (Tensor a '[]) where
   def = Scalar def
 
-instance (KnownNat n, Default a, Container Vector a) => Default (Tensor a '[n]) where
+instance (KnownNat n, Default a, Usable a) => Default (Tensor a '[n]) where
   def = Vector $ konst def (natVal' (Proxy::Proxy n))
 
-instance (KnownNat n, KnownNat m, Default a, Container Vector a, Num a) => Default (Tensor a '[n, m]) where
+instance (KnownNat n, KnownNat m, Default a, Usable a) => Default (Tensor a '[n, m]) where
   def = Matrix $ konst def (natVal' (Proxy::Proxy n), natVal' (Proxy::Proxy m))
 
 
@@ -42,7 +45,7 @@ instance Num a => Num (Tensor a '[]) where
   signum (Scalar a) = Scalar (signum a)
   fromInteger n = Scalar (fromInteger n)
 
-instance (KnownNat n, Num a, Num (Vector a), Container Vector a) => Num (Tensor a '[n]) where
+instance (KnownNat n, Usable a) => Num (Tensor a '[n]) where
   Vector a + Vector b = Vector (a + b)
   Vector a - Vector b = Vector (a - b)
   Vector a * Vector b = Vector (a * b)
@@ -51,7 +54,7 @@ instance (KnownNat n, Num a, Num (Vector a), Container Vector a) => Num (Tensor 
   signum (Vector a) = Vector (signum a)
   fromInteger n = Vector $ konst (fromInteger n) (natVal' (Proxy::Proxy n))
 
-instance (KnownNat n, KnownNat m, Num a, Num (Vector a), Container Vector a) => Num (Tensor a '[n, m]) where
+instance (KnownNat n, KnownNat m, Usable a) => Num (Tensor a '[n, m]) where
   Matrix a + Matrix b = Matrix (a + b)
   Matrix a - Matrix b = Matrix (a - b)
   Matrix a * Matrix b = Matrix (a * b)
