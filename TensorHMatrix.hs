@@ -4,12 +4,14 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module TensorHMatrix where
 
 import Data.Proxy
 import GHC.TypeLits hiding (natVal')
 import Numeric.LinearAlgebra
+import Data.Default
 
 natVal' :: (KnownNat n, Num a) => proxy n -> a
 natVal' = fromInteger . natVal
@@ -18,6 +20,18 @@ data Tensor a (dims :: [Nat]) where
   Scalar :: a -> Tensor a '[]
   Vector :: Vector a -> Tensor a '[n]
   Matrix :: Matrix a -> Tensor a '[n, m]
+
+deriving instance (Show a, Element a) => Show (Tensor a dims)
+
+instance (Default a) => Default (Tensor a '[]) where
+  def = Scalar def
+
+instance (KnownNat n, Default a, Container Vector a) => Default (Tensor a '[n]) where
+  def = Vector $ konst def (natVal' (Proxy::Proxy n))
+
+instance (KnownNat n, KnownNat m, Default a, Container Vector a, Num a) => Default (Tensor a '[n, m]) where
+  def = Matrix $ konst def (natVal' (Proxy::Proxy n), natVal' (Proxy::Proxy m))
+
 
 instance Num a => Num (Tensor a '[]) where
   Scalar a + Scalar b = Scalar (a + b)
