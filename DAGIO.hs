@@ -21,25 +21,29 @@ import VarArgs
 
 import Prelude hiding (curry, uncurry)
 
-data Node (f :: k -> *) (output :: k)
-  = forall (inputs :: [k]). Node
-  { forward :: Rec f inputs -> f output
-  , inputs :: Rec (Node f) inputs
-  , output :: IORef (f output)
+data Node (output :: *)
+  = forall (inputs :: [*]). Node
+  { forward :: HList inputs -> Identity output
+  , inputs :: Rec Node inputs
+  , output :: IORef (Identity output)
   , updated :: IORef Bool
   --, gradInputs :: Rec (IORef :. f) inputs
   --, backwards :: Rec f input -> out -> Rec f input
   }
-  | Source { source :: IORef (f output) }
+  | Source { source :: IORef (Identity output) }
 
-readNode :: Node f output -> IO (f output)
+readNode :: Node output -> IO (Identity output)
 readNode Node{output} = readIORef output
 readNode Source{source} = readIORef source
 
+makeSource output = Source <$> newIORef (Identity output)
+
+makeBinary f a b = makeNode (uncurry2 f) a b
+
 --makeNode :: forall f inputs output c. Curry f inputs (f output) c => c -> Curried (Node f) inputs (IO (Node f output))
 makeNode f = curry g where
+  forward' = f --uncurry f
   g inputs' = do
-    let forward' = f--uncurry f
     ins <- rtraverse readNode inputs'
     output' <- newIORef (forward' ins)
     updated' <- newIORef True
@@ -50,7 +54,7 @@ makeNode f = curry g where
       , updated = updated'
       }
 
-resetNode :: Node f output -> IO ()
+resetNode :: Node output -> IO ()
 resetNode Source{} = return ()
 resetNode Node{inputs, updated} = do
   todo <- readIORef updated
@@ -58,7 +62,7 @@ resetNode Node{inputs, updated} = do
     rtraverse_ (\n -> Const <$> resetNode n) inputs
     writeIORef updated False
 
-evalNode :: Node f output -> IO (f output)
+evalNode :: Node output -> IO (Identity output)
 evalNode Source{source} = readIORef source
 evalNode Node{..} = do
   done <- readIORef updated
