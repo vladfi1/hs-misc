@@ -55,6 +55,8 @@ instance Equality TypeRep where
 instance TestEquality TypeRep where
   testEquality a b = het2homo <$> equal' a b
 
+-- these should be TH-generated?
+-- how to guarantee unique IDs?
 type instance TypeTable Z = Typed Int
 instance BaseType Int where
   type Index Int = Z
@@ -62,4 +64,8 @@ instance BaseType Int where
 type instance TypeTable (S Z) = Typed []
 instance BaseType [] where
   type Index [] = S Z
+
+type instance TypeTable (S (S Z)) = Typed (->)
+instance BaseType (->) where
+  type Index (->) = S (S Z)
 
