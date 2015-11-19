@@ -4,20 +4,22 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds, PolyKinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module DAGIO where
 
 import Data.IORef
-import Data.STRef
 
 import Data.Vinyl
 import Data.Vinyl.Functor
 import VinylUtils
 
 import Control.Monad
-import Data.Functor.Sum
 
 import VarArgs
+
+import Data.Default
+import DefaultM
 
 import Prelude hiding (curry, uncurry)
 
@@ -37,8 +39,11 @@ readNode Node{output} = readIORef output
 readNode Source{source} = readIORef source
 
 makeSource output = Source <$> newIORef (Identity output)
-
+makeUnary f a = makeNode (uncurry1 f) a
 makeBinary f a b = makeNode (uncurry2 f) a b
+
+instance Default output => DefaultM IO (Node output) where
+    defM = Source <$> newIORef (Identity def)
 
 --makeNode :: forall f inputs output c. Curry f inputs (f output) c => c -> Curried (Node f) inputs (IO (Node f output))
 makeNode f = curry g where
@@ -47,7 +52,7 @@ makeNode f = curry g where
     ins <- rtraverse readNode inputs'
     output' <- newIORef (forward' ins)
     updated' <- newIORef True
-    return $ Node
+    return Node
       { forward = forward'
       , inputs = inputs'
       , output = output'
@@ -71,4 +76,3 @@ evalNode Node{..} = do
     writeIORef output (forward ins)
     writeIORef updated True
   readIORef output
-
