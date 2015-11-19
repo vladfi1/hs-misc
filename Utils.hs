@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
 {-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
@@ -13,6 +13,7 @@ import Generics.SOP.BasicFunctors
 import Generics.SOP.Sing
 import Data.Proxy
 import Data.Default
+import GHC.TypeLits
 
 import Constraints
 
@@ -161,3 +162,5 @@ liftA_FSOP f (FlipSOP sop) = FlipSOP (liftA_FNS (liftA_FNP f) sop)
 collapse_FSOP :: FlipSOP (FK f) bs a -> [f a]
 collapse_FSOP (FlipSOP sop) = unComp . collapse_FNS $ liftA_FNS (FK . Comp . collapse_FNP) sop
 
+instance KnownNat n => SingI n where
+  sing = undefined
