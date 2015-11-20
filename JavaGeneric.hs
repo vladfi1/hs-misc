@@ -80,8 +80,6 @@ concat <$> traverse deriveGeneric
 allGeneric :: Dict (AllGeneric CompilationUnit)
 allGeneric = Dict
 
-type PrimTypes = [Char, Int, Integer, Double]
-
 type GenericTypes =
   [ CompilationUnit
   , TypeDecl
@@ -169,7 +167,8 @@ type GenericTypes =
   ]
 
 
-type AllTypes = PrimTypes :++: GenericTypes
+type PrimTypes = [Char, Int, Integer, Double]
+type AllTypes = Char ': Int ': Integer ': Double ': GenericTypes
 
 type family Codes xs where
   Codes '[] = '[]
@@ -184,4 +183,3 @@ type AllCodes = (TypeLevel.Concat (TypeLevel.Concat (Codes GenericTypes)))
 complete :: Dict (All (Find AllTypes) AllCodes)
 --complete :: Dict (All3 (Find AllTypes) (Codes GenericTypes))
 complete = Dict
-
