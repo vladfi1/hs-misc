@@ -38,14 +38,19 @@ readNode :: Node output -> IO (Identity output)
 readNode Node{output} = readIORef output
 readNode Source{source} = readIORef source
 
+makeSource :: output -> IO (Node output)
 makeSource output = Source <$> newIORef (Identity output)
-makeUnary f a = makeNode (uncurry1 f) a
-makeBinary f a b = makeNode (uncurry2 f) a b
+
+makeUnary :: (a -> output) -> Node a -> IO (Node output)
+makeUnary f = makeNode (uncurry1 f)
+
+makeBinary :: (a -> b -> output) -> Node a -> Node b -> IO (Node output)
+makeBinary f = makeNode (uncurry2 f)
 
 instance Default output => DefaultM IO (Node output) where
     defM = Source <$> newIORef (Identity def)
 
---makeNode :: forall f inputs output c. Curry f inputs (f output) c => c -> Curried (Node f) inputs (IO (Node f output))
+makeNode :: Curry Node inputs (IO (Node output)) c => (HList inputs -> Identity output) -> c
 makeNode f = curry g where
   forward' = f --uncurry f
   g inputs' = do
