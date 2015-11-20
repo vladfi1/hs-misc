@@ -5,14 +5,17 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables, InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 module GrammarNNDAG where
 
 import Control.Monad (foldM)
+import Data.Function (fix)
 
 import Generics.SOP
 import Generics.SOP.NP
 import Generics.SOP.NS
+import Data.Vinyl
 
 import Utils
 import List
@@ -119,30 +122,33 @@ instance (Neural t, Generic t, KnownNat (Size t), SingI (MapSize2 (Code t)), All
 instance (Default a, Usable a, HasParams t) => DefaultM IO (EncodeParams a t) where
   defM = EncodeParams <$> sequence'_NP (cpure_NP (Proxy::Proxy Blah) (Comp defM))
 
-class Encode ts t where
-  encode :: (Floating a, Usable a) => NP (EncodeParams a) ts -> t -> IO (Encoding a t)
+newtype Encoder a t = Encoder { runEncoder :: t -> IO (Encoding a t) }
+
+class EncodeRec ts ts' t where
+  encodeRec :: (Floating a, Usable a) => Rec (EncodeParams a) ts -> Rec (Encoder a) ts' -> Encoder a t
 
 instance {-# OVERLAPPABLE #-}
-  (SingI (Code t), All2 (Encode ts) (Code t), KnownNat (Size t), Generic t, Neural t, Find ts t)
-  => Encode ts t where
-  encode :: forall a. (Floating a, Usable a) => NP (EncodeParams a) ts -> t -> IO (Encoding a t)
-  encode params t = Generic <$> repr <*> children
-    where
-      {-
-      cliftA_SOP' :: forall f g. (forall t'. Encode t' => f t' -> g t') ->
-        SOP f (Code t) -> SOP g (Code t)
-      -}
+  (Generic t, Neural t, KnownNat (Size t), Find ts t, All2 (Find ts') (Code t))
+  => EncodeRec ts ts' t where
+    encodeRec params encoders = Encoder f where
+      EncodeParams params' = index find params :: EncodeParams _ t
+      encoders' = cpure_POP (Proxy::Proxy (Find ts')) (Fn $ Comp . runEncoder (index find encoders) . unI)
+      f t = do
+        children <- sequence_SOP' (ap_SOP encoders' (from t))
+        let childReprs = getReprSOP children
+        parent <- encodeParent params' childReprs
+        return $ Generic parent children
 
-      encode' :: forall t'. (Encode ts t') => I t' -> (IO :.: Encoding a) t'
-      encode' (I t') = Comp $ encode params t'
+makeEncoders :: forall a ts ts'. (Floating a, Usable a, SingI ts', All (EncodeRec ts ts') ts') =>
+  Rec (EncodeParams a) ts -> Rec (Encoder a) ts'
+makeEncoders params = fix (np2Rec . f) where
+  f encoders = cpure_NP (Proxy::Proxy (EncodeRec ts ts')) (encodeRec params encoders)
 
-      cliftA_SOP' = cliftA_SOP (Proxy :: Proxy (Encode ts))
-
-      children :: IO (SOP (Encoding a) (Code t))
-      children = sequence'_SOP $ cliftA_SOP' encode' (from t)
-
-      EncodeParams param = index (find :: Index ts t) (np2Rec params)
-      repr = encodeParent param =<< (getReprSOP <$> children)
-      --childReprs = liftA_SOP getRepr
+makeEncoder :: forall proxy a ts ts'. (Floating a, Usable a, SingI ts', All (EncodeRec ts ts') ts') =>
+  Rec (EncodeParams a) ts -> proxy ts' -> (forall t. Find ts' t => t -> IO (Encoding a t))
+makeEncoder params _ = f where
+  encoders :: Rec (Encoder a) ts'
+  encoders = makeEncoders params
+  f t = runEncoder (index find encoders) t
 
 --data DecodeParams a t = DecodeParams (Affine a (Len

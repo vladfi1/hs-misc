@@ -29,6 +29,8 @@ import TensorHMatrix
 import Utils
 import DAGIO
 
+import Control.Monad.Fix
+
 data SList xs where
   SNil' :: SList '[]
   SCons' :: Sing x -> SList xs -> SList (x ': xs)
@@ -55,25 +57,31 @@ instance {-# OVERLAPPABLE #-} Neural t where
 initialParams :: (Default a, Usable a) => IO (NP (EncodeParams a) GenericTypes)
 initialParams = sequence'_NP $ cpure_NP (Proxy::Proxy HasParams) (Comp defM)
 
-newtype Params ts a = Params (NP (EncodeParams a) ts)
+--newtype Params ts a = Params (NP (EncodeParams a) ts)
 
-instance Encode GenericTypes Char where
-  encode _ c = Primitive . Repr <$> makeSource (oneHot $ unsafeIndex c chars)
+instance EncodeRec GenericTypes AllTypes Char where
+  encodeRec _ _ = Encoder f where
+    f c = Primitive . Repr <$> makeSource (oneHot $ unsafeIndex c chars)
 
-instance Encode GenericTypes Int where
-  encode _ i = Primitive . Repr <$> makeSource (fromIntegral i)
+instance EncodeRec GenericTypes AllTypes Int where
+  encodeRec _ _ = Encoder f where
+    f i = Primitive . Repr <$> makeSource (fromIntegral i)
 
-instance Encode GenericTypes Integer where
-  encode _ i = Primitive . Repr <$> makeSource (fromIntegral i)
+instance EncodeRec GenericTypes AllTypes Integer where
+  encodeRec _ _ = Encoder f where
+    f i = Primitive . Repr <$> makeSource (fromIntegral i)
 
-instance Encode GenericTypes Double where
-  encode _ d = Primitive . Repr <$> (makeSource $ realToFrac d)
-
---encodeJava ::
+instance EncodeRec GenericTypes AllTypes Double where
+  encodeRec _ _ = Encoder f where
+    f d = Primitive . Repr <$> (makeSource $ realToFrac d)
 
 main :: IO (Encoding Float CompilationUnit)
 main = do
-  ps <- initialParams
   java <- readFile "Test.java"
   let Right parsed = parser compilationUnit java
-  encode ps parsed
+
+  ps <- np2Rec <$> initialParams
+
+  let encode = makeEncoder ps (Proxy::Proxy AllTypes)
+
+  encode parsed
