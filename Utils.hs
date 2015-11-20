@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
 {-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -31,33 +32,44 @@ np2Rec :: NP f xs -> Rec f xs
 np2Rec Nil = RNil
 np2Rec (fx :* fxs) = fx :& np2Rec fxs
 
-
--- like liftA_NP but without the SingI xs constraint
+-- like liftA_NP but without the constraints
 liftA_NP' :: (forall a. f a -> g a) -> NP f xs -> NP g xs
 liftA_NP' _ Nil = Nil
 liftA_NP' f (fx :* fxs) = f fx :* liftA_NP' f fxs
 
--- like liftA2_NS but without the SingI xs constraint
+-- like liftA2_NS but without the constrains
 liftA_NS' :: (forall a. f a -> g a) -> NS f xs -> NS g xs
 liftA_NS' f (Z fx) = Z (f fx)
 liftA_NS' f (S fxs) = S (liftA_NS' f fxs)
 
--- like liftA_SOP but without the SingI xs constraint
+-- like liftA_SOP but without the constraints
 liftA_SOP' :: (forall a. f a -> g a) -> SOP f xss -> SOP g xss
 liftA_SOP' f (SOP sop) = SOP (liftA_NS' (liftA_NP' f) sop)
 
--- like liftA2_NP but without the SingI xs constraint
+-- like liftA2_NP but without the constraints
 liftA2_NP' :: (forall a. f a -> g a -> h a) -> NP f xs -> NP g xs -> NP h xs
 liftA2_NP' _ Nil Nil = Nil
 liftA2_NP' f (x :* xs) (y :* ys) = f x y :* liftA2_NP' f xs ys
 
--- like liftA2_NS but without the SingI xs constraint
+-- like liftA2_NS but without the constraint
 liftA2_NS' :: forall f g h xs. (forall a. f a -> g a -> h a) -> NP f xs -> NS g xs -> NS h xs
 liftA2_NS' f (fx :* _) (Z gx) = Z (f fx gx)
 liftA2_NS' f (_ :* fxs) (S gxs) = S (liftA2_NS' f fxs gxs)
 
+liftA2_SOP'' :: forall f g h xs. (forall a. f a -> g a -> h a) -> NP (NP f) xs -> NS (NP g) xs -> NS (NP h) xs
+liftA2_SOP'' f (fxs :* _) (Z gxs) = Z (liftA2_NP' f fxs gxs)
+liftA2_SOP'' f (_ :* fxss) (S gxss) = S (liftA2_SOP'' f fxss gxss)
+
+-- like liftA2_SOP but without the constraints
+liftA2_SOP' :: forall f g h xss. (forall a. f a -> g a -> h a) -> POP f xss -> SOP g xss -> SOP h xss
+liftA2_SOP' f (POP pop) (SOP sop) = SOP $ liftA2_SOP'' f pop sop
+
 collapse_SOP' :: SOP (K a) xs -> [a]
 collapse_SOP' (SOP sop) = collapse_NS $ liftA_NS' (K . collapse_NP) sop
+
+sequence_SOP' :: Applicative f => SOP (f :.: g) xss -> f (SOP g xss)
+sequence_SOP' (SOP (Z fgxs)) = SOP . Z <$> sequence'_NP fgxs
+sequence_SOP' (SOP (S ns)) = SOP . S . unSOP <$> sequence_SOP' (SOP ns)
 
 newtype FK f b a = FK (f a)
 
