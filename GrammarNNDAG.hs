@@ -29,14 +29,7 @@ import DefaultM
 
 import Numeric.LinearAlgebra (Numeric)
 
-import Prelude hiding (zipWith)
-
-type family Codes xs where
-  Codes '[] = '[]
-  Codes (x ': xs) = Code x ': Codes xs
-
-class Neural a where
-  type Size a :: Nat
+type family Size s t :: Nat
 
 newtype Repr a dim = Repr { runRepr :: Node (Tensor a '[dim]) }
   --deriving (Show)
@@ -67,13 +60,13 @@ affine (Affine bias weights) inputs =
   foldM (makeBinary (+)) bias =<< (map runRepr . collapse_NP <$> (sequence'_NP $ liftA2_NP' linear' weights inputs))
   where linear' m v = Comp $ K . Repr <$> linear m v
 
-type family MapSize ts where
-  MapSize '[] = '[]
-  MapSize (t ': ts) = Size t ': MapSize ts
+type family MapSize s ts where
+  MapSize s '[] = '[]
+  MapSize s (t ': ts) = Size s t ': MapSize s ts
 
-type family MapSize2 (tss :: [[*]]) :: [[Nat]] where
-  MapSize2 '[] = '[]
-  MapSize2 (ts ': tss) = MapSize ts ': MapSize2 tss
+type family MapSize2 s (tss :: [[*]]) :: [[Nat]] where
+  MapSize2 s '[] = '[]
+  MapSize2 s (ts ': tss) = MapSize s ts ': MapSize2 s tss
 
 encodeParent :: (Floating a, Usable a, KnownNat outDim) =>
   NP (Affine a outDim) inDims -> SOP (Repr a) inDims -> IO (Repr a outDim)
@@ -81,9 +74,9 @@ encodeParent :: (Floating a, Usable a, KnownNat outDim) =>
 encodeParent params (SOP sop) = Repr <$> (makeUnary (tmap tanh) =<< (collapse_NS $ liftA2_NS' affine' params sop))
   where affine' p i = K $ affine p i
 
-data Encoding a t where
-  Primitive :: Neural t => Repr a (Size t) -> Encoding a t
-  Generic :: (Neural t, Generic t) => Repr a (Size t) -> SOP (Encoding a) (Code t) -> Encoding a t
+data Encoding s a t where
+  Primitive :: Repr a (Size s t) -> Encoding s a t
+  Generic :: (Generic t) => Repr a (Size s t) -> SOP (Encoding s a) (Code t) -> Encoding s a t
 
 {-
 instance Show a => Show (Encoding t a) where
@@ -91,24 +84,24 @@ instance Show a => Show (Encoding t a) where
   show (Generic repr children) = showAsList . map unK . collapse_FSOP $ liftA_FSOP (FK . K . show) children
 -}
 
-getRepr :: Encoding a t -> Repr a (Size t)
+getRepr :: Encoding s a t -> Repr a (Size s t)
 getRepr (Primitive repr) = repr
 getRepr (Generic repr _) = repr
 
 -- no way to write these with combinators?
-getReprNP :: NP (Encoding a) ts -> NP (Repr a) (MapSize ts)
+getReprNP :: NP (Encoding s a) ts -> NP (Repr a) (MapSize s ts)
 getReprNP Nil = Nil
 getReprNP (e :* es) = getRepr e :* getReprNP es
 
-getReprSOP' :: NS (NP (Encoding a)) ts -> NS (NP (Repr a)) (MapSize2 ts)
+getReprSOP' :: NS (NP (Encoding s a)) ts -> NS (NP (Repr a)) (MapSize2 s ts)
 getReprSOP' (S es) = S $ getReprSOP' es
 getReprSOP' (Z es) = Z $ getReprNP es
 
-getReprSOP :: SOP (Encoding a) ts -> SOP (Repr a) (MapSize2 ts)
+getReprSOP :: SOP (Encoding s a) ts -> SOP (Repr a) (MapSize2 s ts)
 getReprSOP (SOP sop) = SOP $ getReprSOP' sop
 
-newtype EncodeParams a t =
-  EncodeParams { runEncodeParams :: NP (Affine a (Size t)) (MapSize2 (Code t)) }
+newtype EncodeParams s a t =
+  EncodeParams { runEncodeParams :: NP (Affine a (Size s t)) (MapSize2 s (Code t)) }
 
 --deriving instance (SListI (MapSize2 (Code t))) => Show (EncodeParams t a)
 
@@ -117,22 +110,22 @@ newtype EncodeParams a t =
 class (SListI dims, All KnownNat dims) => Blah dims
 instance (SListI dims, All KnownNat dims) => Blah dims
 
-class (Neural t, Generic t, KnownNat (Size t), SListI (MapSize2 (Code t)), AllF Blah (MapSize2 (Code t))) => HasParams t
-instance (Neural t, Generic t, KnownNat (Size t), SListI (MapSize2 (Code t)), AllF Blah (MapSize2 (Code t))) => HasParams t
+class (Generic t, KnownNat (Size s t), SListI (MapSize2 s (Code t)), AllF Blah (MapSize2 s (Code t))) => HasParams s t
+instance (Generic t, KnownNat (Size s t), SListI (MapSize2 s (Code t)), AllF Blah (MapSize2 s (Code t))) => HasParams s t
 
-instance (Default a, Usable a, HasParams t) => DefaultM IO (EncodeParams a t) where
+instance (Default a, Usable a, HasParams s t) => DefaultM IO (EncodeParams s a t) where
   defM = EncodeParams <$> sequence'_NP (cpure_NP (Proxy::Proxy Blah) (Comp defM))
 
-newtype Encoder a t = Encoder { runEncoder :: t -> IO (Encoding a t) }
+newtype Encoder s a t = Encoder { runEncoder :: t -> IO (Encoding s a t) }
 
-class EncodeRec ts ts' t where
-  encodeRec :: (Floating a, Usable a) => Rec (EncodeParams a) ts -> Rec (Encoder a) ts' -> Encoder a t
+class EncodeRec ts ts' s t where
+  encodeRec :: (Floating a, Usable a) => Rec (EncodeParams s a) ts -> Rec (Encoder s a) ts' -> Encoder s a t
 
 instance {-# OVERLAPPABLE #-}
-  (Generic t, Neural t, KnownNat (Size t), Find ts t, All2 (Find ts') (Code t))
-  => EncodeRec ts ts' t where
+  (Generic t, KnownNat (Size s t), Find ts t, All2 (Find ts') (Code t))
+  => EncodeRec ts ts' s t where
     encodeRec params encoders = Encoder f where
-      EncodeParams params' = index find params :: EncodeParams _ t
+      EncodeParams params' = index find params :: EncodeParams s _ t
       encoders' = cpure_POP (Proxy::Proxy (Find ts')) (Fn $ Comp . runEncoder (index find encoders) . unI)
       f t = do
         children <- sequence_SOP' (ap_SOP encoders' (from t))
@@ -140,15 +133,15 @@ instance {-# OVERLAPPABLE #-}
         parent <- encodeParent params' childReprs
         return $ Generic parent children
 
-makeEncoders :: forall a ts ts'. (Floating a, Usable a, SListI ts', All (EncodeRec ts ts') ts') =>
-  Rec (EncodeParams a) ts -> Rec (Encoder a) ts'
+makeEncoders :: forall ts ts' s a. (Floating a, Usable a, SListI ts', All (EncodeRec ts ts' s) ts') =>
+  Rec (EncodeParams s a) ts -> Rec (Encoder s a) ts'
 makeEncoders params = fix (np2Rec . f) where
-  f encoders = cpure_NP (Proxy::Proxy (EncodeRec ts ts')) (encodeRec params encoders)
+  f encoders = cpure_NP (Proxy::Proxy (EncodeRec ts ts' s)) (encodeRec params encoders)
 
-makeEncoder :: forall proxy a ts ts'. (Floating a, Usable a, SListI ts', All (EncodeRec ts ts') ts') =>
-  Rec (EncodeParams a) ts -> proxy ts' -> (forall t. Find ts' t => t -> IO (Encoding a t))
+makeEncoder :: forall proxy ts ts' s a. (Floating a, Usable a, SListI ts', All (EncodeRec ts ts' s) ts') =>
+  Rec (EncodeParams s a) ts -> proxy ts' -> (forall t. Find ts' t => t -> IO (Encoding s a t))
 makeEncoder params _ = f where
-  encoders :: Rec (Encoder a) ts'
+  encoders :: Rec (Encoder s a) ts'
   encoders = makeEncoders params
   f t = runEncoder (index find encoders) t
 
