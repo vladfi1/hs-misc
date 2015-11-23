@@ -31,14 +31,6 @@ import DAGIO
 
 import Control.Monad.Fix
 
-data SList xs where
-  SNil' :: SList '[]
-  SCons' :: Sing x -> SList xs -> SList (x ': xs)
-
-fromSing :: Sing xs -> SList xs
-fromSing SNil = SNil'
-fromSing SCons = SCons' sing (fromSing sing)
-
 chars = [' ' .. '~']
 numChars = length chars -- 95
 

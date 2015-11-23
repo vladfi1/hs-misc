@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds, PolyKinds, ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
 {-# LANGUAGE FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module JavaGeneric where
@@ -9,11 +10,12 @@ import Language.Java.Syntax
 
 import Generics.SOP
 import Generics.SOP.TH
+import Generics.SOP.NP
 
-import Data.Constraint
-import Constraints
 import List
-import TypeLevel
+import Generics.SOP.Dict
+
+import GHC.Exts (Constraint)
 
 -- use a type family to break the cyclic class
 -- also to do case analysis on the type
@@ -77,7 +79,7 @@ concat <$> traverse deriveGeneric
   ,''Catch
   ]
 
-allGeneric :: Dict (AllGeneric CompilationUnit)
+allGeneric :: Dict AllGeneric CompilationUnit
 allGeneric = Dict
 
 type GenericTypes =
@@ -170,6 +172,7 @@ type GenericTypes =
 type PrimTypes = [Char, Int, Integer, Double]
 type AllTypes = Char ': Int ': Integer ': Double ': GenericTypes
 
+{-
 type family Codes xs where
   Codes '[] = '[]
   Codes (x ': xs) = Code x ': Codes xs
@@ -179,7 +182,13 @@ type family All3 (c :: k -> Constraint) (ksss :: [[[k]]]) :: Constraint where
   All3 c (kss ': ksss) = (All2 c kss, All3 c ksss)
 
 type AllCodes = (TypeLevel.Concat (TypeLevel.Concat (Codes GenericTypes)))
+-}
 
-complete :: Dict (All (Find AllTypes) AllCodes)
+class (All2 (Find ts) (Code t), Find ts t) => Contained ts t
+instance (All2 (Find ts) (Code t), Find ts t) => Contained ts t
+
+--type Complete universe generic = All
+
+complete :: Dict (All (Contained AllTypes)) GenericTypes
 --complete :: Dict (All3 (Find AllTypes) (Codes GenericTypes))
 complete = Dict

@@ -12,11 +12,15 @@ import Generics.SOP.NP
 import Generics.SOP.NS
 import Generics.SOP.BasicFunctors
 import Generics.SOP.Sing
+import Generics.SOP.Constraint
+
+import Constraints
+
 import Data.Proxy
 import Data.Default
 import GHC.TypeLits
 
-import Constraints
+--import Constraints
 
 import Data.List (intercalate)
 
@@ -117,7 +121,7 @@ collapse_FNP :: FlipNP (FK f) bs a -> [f a]
 collapse_FNP (FlipNP np) = collapse_NP $ liftA_NP' f np
   where f (Flip (FK fa)) = K fa
 
-instance (SingI bs, AllC (CompC Show (Flip f a)) bs) => Show (FlipNP f bs a) where
+instance (SListI bs, All (CompC Show (Flip f a)) bs) => Show (FlipNP f bs a) where
   show (FlipNP np) = showAsList $ collapse_NP $ cliftA_NP (Proxy::Proxy (CompC Show (Flip f a))) (K . show) np
 
 instance ForallC1 Functor f => Functor (FlipNP f bs) where
@@ -173,6 +177,3 @@ liftA_FSOP f (FlipSOP sop) = FlipSOP (liftA_FNS (liftA_FNP f) sop)
 
 collapse_FSOP :: FlipSOP (FK f) bs a -> [f a]
 collapse_FSOP (FlipSOP sop) = unComp . collapse_FNS $ liftA_FNS (FK . Comp . collapse_FNP) sop
-
-instance KnownNat n => SingI n where
-  sing = undefined

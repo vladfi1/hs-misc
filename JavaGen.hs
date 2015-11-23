@@ -1,14 +1,15 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds, ConstraintKinds, PolyKinds #-}
-{-# LANGUAGE FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
 module JavaGen where
 
-import Data.Constraint
+--import Data.Constraint
 
 import Generics.SOP
+import Generics.SOP.Constraint
 
 --import Constraints
 import Random
@@ -34,8 +35,8 @@ instance Gen Double where
 type family Gen' a :: Constraint where
   Gen' a = (Generic a, All2 Gen (Code a))
 
-instance (SingI l, All Gen l) => Gen (NP I l) where
-  gen = case (sing :: Sing l) of
+instance (SListI l, All Gen l) => Gen (NP I l) where
+  gen = case (sList :: SList l) of
     SNil -> return Nil
     SCons -> (:*) <$> (I <$> gen) <*> gen
 
@@ -53,13 +54,12 @@ reifyAll2 = case (sing :: Sing l) of
   SNil -> Nil
   SCons -> reifyAll :* reifyAll2
 
---proof :: All2 Gen ls => Dict (All (All Gen) 
+--proof :: All2 Gen ls => Dict (All (All Gen)
 -}
 
-sums :: forall w l m. (SingI l, All SingI l, All2 Gen l, MonadDiscrete w m) => [m (NS (NP I) l)]
-sums = case (sing :: Sing l) of
+sums :: forall w l m. (MonadDiscrete w m, All2 Gen l) => [m (NS (NP I) l)]
+sums = case (sList :: SList l) of
   SNil -> []
   SCons -> (Z <$> gen) : map (fmap S) sums
 
---genExp :: MonadDiscrete w m -> m 
-
+--genExp :: MonadDiscrete w m -> m

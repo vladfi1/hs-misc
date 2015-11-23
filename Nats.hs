@@ -5,28 +5,35 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Nats where
 
-import TypeLevel
+--import TypeLevel
 import Data.Proxy
 import qualified GHC.TypeLits as TL
-import Generics.SOP.Sing
+--import Generics.SOP.Sing
+import Data.Singletons.Prelude
+import Data.Singletons.TH (genSingletons)
 
 data Nat = Z | S Nat
+  deriving (Eq, Ord, Show)
+
+genSingletons [''Nat]
 
 instance Enum Nat where
   succ = S
-  
+
   pred Z = Z
   pred (S n) = n
-  
+
   toEnum 0 = Z
   toEnum n = S $ toEnum (n-1)
-  
+
   fromEnum Z = 0
   fromEnum (S n) = 1 + (fromEnum n)
 
+{-
 type family Min (x :: Nat) (y :: Nat) :: Nat where
   Min Z y = Z
   Min x Z = Z
@@ -36,6 +43,7 @@ type family Max (x :: Nat) (y :: Nat) :: Nat where
   Max Z y = y
   Max x Z = x
   Max (S x) (S y) = S (Max x y)
+-}
 
 infix 4 :<:
 type family (x :: Nat) :<: (y :: Nat) :: Bool where
@@ -94,12 +102,11 @@ type family GCD (m :: Nat) (n :: Nat) :: Nat where
 gcd' :: p1 m -> p2 n -> Proxy (GCD m n)
 gcd' _ _ = Proxy
 
--- use singletons?
-
 type family ToNat (n :: TL.Nat) :: Nat where
   ToNat 0 = Z
   ToNat n = S (ToNat (n TL.- 1))
 
+{-
 type SNat = (Sing :: Nat -> *)
 
 data instance Sing (n :: Nat) where
@@ -111,6 +118,7 @@ instance SingI Z where
 
 instance (SingI n) => SingI (S n) where
   sing = SS sing
+-}
 
 snat2nat :: SNat n -> Nat
 snat2nat SZ = Z
@@ -140,4 +148,3 @@ data LTE n where
 data LT n where
   ZLT :: LT (S n)
   SLT :: LT n -> LT (S n)
-

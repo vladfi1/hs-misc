@@ -15,17 +15,14 @@ module Constraints
   , FlipC
   , CompC
   , ForallC1
-  , AllC (..)
-  , All2C, All3C
-  , CList (..)
   , module Data.Constraint
   ) where
 
 import Data.Proxy
 import Data.Constraint
-import Generics.SOP.Constraint
-import Generics.SOP.Sing
-import List
+--import Generics.SOP.Constraint
+--import Generics.SOP.Sing
+--import Data.Singletons.Prelude.List hiding (All)
 
 newtype Forall c = Forall (forall a. Dict (c a))
 
@@ -71,6 +68,7 @@ instance c (f a) :=> CompC c f a where
 
 type ForallC1 c f = ForallC (CompC c f)
 
+{-
 data CList c xs where
   CNil :: CList c '[]
   CCons :: Dict (c x) -> CList c xs -> CList c (x ': xs)
@@ -88,8 +86,8 @@ type All2C c = AllC (AllC c)
 type All3C c = AllC (All2C c)
 
 forallImpliesAll :: forall c xs. SList xs -> ForallC c :- AllC c xs
-forallImpliesAll SNil' = Sub Dict
-forallImpliesAll (SCons' (_ :: Sing a) (l :: SList l)) = Sub $
+forallImpliesAll SNil = Sub Dict
+forallImpliesAll SCons = Sub $
   case (forallC :: Forall c) of
-    Forall (Dict :: Dict (c a)) -> Dict \\ (forallImpliesAll l :: ForallC c :- AllC c l)
-
+    Forall (Dict :: Dict (c a)) -> Dict \\ (forallImpliesAll sing)
+-}

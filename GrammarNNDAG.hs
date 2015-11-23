@@ -15,6 +15,7 @@ import Data.Function (fix)
 import Generics.SOP
 import Generics.SOP.NP
 import Generics.SOP.NS
+import Generics.SOP.Constraint
 import Data.Vinyl
 
 import Utils
@@ -51,13 +52,13 @@ linear (Linear m) (Repr v) = makeBinary mv m v
 
 data Affine a outDim inDims = Affine (Node (Tensor a '[outDim])) (NP (Linear a outDim) inDims)
 
-instance (Default a, Usable a, KnownNat outDim, SingI inDims, All KnownNat inDims) => DefaultM IO (Affine a outDim inDims) where
+instance (Default a, Usable a, KnownNat outDim, SListI inDims, All KnownNat inDims) => DefaultM IO (Affine a outDim inDims) where
   defM = Affine <$> defM <*> sequence'_NP (cpure_NP (Proxy::Proxy KnownNat) (Comp defM))
 
 --deriving instance (AllC (CompC Show (Flip (Linear outDim) a)) inDims) => Show (Affine outDim inDims a)
 
 {-
-instance (Default a, Usable a, SingI inDims, All KnownNat inDims, KnownNat outDim) => Default (Affine a outDim inDims) where
+instance (Default a, Usable a, SListI inDims, All KnownNat inDims, KnownNat outDim) => Default (Affine a outDim inDims) where
   def = Affine def (cpure_NP (Proxy::Proxy KnownNat) def)
 -}
 
@@ -109,15 +110,15 @@ getReprSOP (SOP sop) = SOP $ getReprSOP' sop
 newtype EncodeParams a t =
   EncodeParams { runEncodeParams :: NP (Affine a (Size t)) (MapSize2 (Code t)) }
 
---deriving instance (SingI (MapSize2 (Code t))) => Show (EncodeParams t a)
+--deriving instance (SListI (MapSize2 (Code t))) => Show (EncodeParams t a)
 
--- should be able to just use SingI here?
--- would have to write out the proof SingI dims -> All ReifyNat dims
-class (SingI dims, All KnownNat dims) => Blah dims
-instance (SingI dims, All KnownNat dims) => Blah dims
+-- should be able to just use SListI here?
+-- would have to write out the proof SListI dims -> All ReifyNat dims
+class (SListI dims, All KnownNat dims) => Blah dims
+instance (SListI dims, All KnownNat dims) => Blah dims
 
-class (Neural t, Generic t, KnownNat (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
-instance (Neural t, Generic t, KnownNat (Size t), SingI (MapSize2 (Code t)), All Blah (MapSize2 (Code t))) => HasParams t
+class (Neural t, Generic t, KnownNat (Size t), SListI (MapSize2 (Code t)), AllF Blah (MapSize2 (Code t))) => HasParams t
+instance (Neural t, Generic t, KnownNat (Size t), SListI (MapSize2 (Code t)), AllF Blah (MapSize2 (Code t))) => HasParams t
 
 instance (Default a, Usable a, HasParams t) => DefaultM IO (EncodeParams a t) where
   defM = EncodeParams <$> sequence'_NP (cpure_NP (Proxy::Proxy Blah) (Comp defM))
@@ -139,12 +140,12 @@ instance {-# OVERLAPPABLE #-}
         parent <- encodeParent params' childReprs
         return $ Generic parent children
 
-makeEncoders :: forall a ts ts'. (Floating a, Usable a, SingI ts', All (EncodeRec ts ts') ts') =>
+makeEncoders :: forall a ts ts'. (Floating a, Usable a, SListI ts', All (EncodeRec ts ts') ts') =>
   Rec (EncodeParams a) ts -> Rec (Encoder a) ts'
 makeEncoders params = fix (np2Rec . f) where
   f encoders = cpure_NP (Proxy::Proxy (EncodeRec ts ts')) (encodeRec params encoders)
 
-makeEncoder :: forall proxy a ts ts'. (Floating a, Usable a, SingI ts', All (EncodeRec ts ts') ts') =>
+makeEncoder :: forall proxy a ts ts'. (Floating a, Usable a, SListI ts', All (EncodeRec ts ts') ts') =>
   Rec (EncodeParams a) ts -> proxy ts' -> (forall t. Find ts' t => t -> IO (Encoding a t))
 makeEncoder params _ = f where
   encoders :: Rec (Encoder a) ts'
