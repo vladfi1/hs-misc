@@ -4,16 +4,18 @@
 {-# LANGUAGE FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+{-# OPTIONS_GHC -fcontext-stack=200 #-}
+
 module JavaGeneric where
 
 import Language.Java.Syntax
 
 import Generics.SOP
 import Generics.SOP.TH
-import Generics.SOP.NP
 
-import List
+--import List
 import Generics.SOP.Dict
+import Grammar
 
 import GHC.Exts (Constraint)
 
@@ -172,23 +174,5 @@ type GenericTypes =
 type PrimTypes = [Char, Int, Integer, Double]
 type AllTypes = Char ': Int ': Integer ': Double ': GenericTypes
 
-{-
-type family Codes xs where
-  Codes '[] = '[]
-  Codes (x ': xs) = Code x ': Codes xs
-
-type family All3 (c :: k -> Constraint) (ksss :: [[[k]]]) :: Constraint where
-  All3 c '[] = ()
-  All3 c (kss ': ksss) = (All2 c kss, All3 c ksss)
-
-type AllCodes = (TypeLevel.Concat (TypeLevel.Concat (Codes GenericTypes)))
--}
-
-class (All2 (Find ts) (Code t), Find ts t) => Contained ts t
-instance (All2 (Find ts) (Code t), Find ts t) => Contained ts t
-
---type Complete universe generic = All
-
-complete :: Dict (All (Contained AllTypes)) GenericTypes
---complete :: Dict (All3 (Find AllTypes) (Codes GenericTypes))
-complete = Dict
+javaComplete :: Complete PrimTypes GenericTypes
+javaComplete = Dict

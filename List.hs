@@ -42,9 +42,9 @@ instance TestEquality (Index l) where
     return Refl
   testEquality _ _ = Nothing
 
-indices :: Rec f l -> Rec (Index l) l
-indices RNil = RNil
-indices (a :& l) = ZIndex :& rmap SIndex (indices l)
+indices :: SList l -> Rec (Index l) l
+indices SNil = RNil
+indices (SCons _ l) = ZIndex :& rmap SIndex (indices l)
 
 class Find l a where
   find :: Index l a
@@ -55,16 +55,10 @@ instance {-# OVERLAPS #-} Find (a ': l) a where
 instance Find l a => Find (b ': l) a where
   find = SIndex find
 
-rZipWith :: (forall x. f x -> g x -> h x) -> Rec f l -> Rec g l -> Rec h l
-rZipWith _ RNil RNil = RNil
-rZipWith f (fa :& fl) (ga :& gl) = f fa ga :& rZipWith f fl gl
-
-{-
 type family Len (l :: [k]) :: Nat where
-  Len '[] = Nats.Z
-  Len (a ': l) = Nats.S (Len l)
+  Len '[] = Z
+  Len (a ': l) = S (Len l)
 
 reifyLen :: SList l -> SNat (Len l)
-reifyLen SNil' = SZ
-reifyLen (SCons' _ l) = SS $ reifyLen l
--}
+reifyLen SNil = SZ
+reifyLen (SCons _ l) = SS $ reifyLen l
