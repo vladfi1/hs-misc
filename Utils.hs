@@ -18,7 +18,6 @@ import Constraints
 
 import Data.Proxy
 import Data.Default
-import GHC.TypeLits
 
 --import Constraints
 
@@ -74,6 +73,10 @@ collapse_SOP' (SOP sop) = collapse_NS $ liftA_NS' (K . collapse_NP) sop
 sequence_SOP' :: Applicative f => SOP (f :.: g) xss -> f (SOP g xss)
 sequence_SOP' (SOP (Z fgxs)) = SOP . Z <$> sequence'_NP fgxs
 sequence_SOP' (SOP (S ns)) = SOP . S . unSOP <$> sequence_SOP' (SOP ns)
+
+np2ns :: NP f xs -> [NS f xs]
+np2ns Nil = []
+np2ns (fx :* fxs) = Z fx : map S (np2ns fxs)
 
 newtype FK f b a = FK (f a)
 

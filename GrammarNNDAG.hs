@@ -156,7 +156,7 @@ linearIn (LinearIn m) (Repr' v) = Repr' <$> makeBinary mv m v
 
 data AffineIn s a t t' = AffineIn (Repr' s a t') (LinearIn s a t t')
 
-affineIn :: (Floating a, Usable a, KnownNat (Size s t')) => AffineIn s a t t' -> Repr' s a t -> IO (Repr' s a t')
+affineIn :: (Floating a, Usable a, KnownSize s t') => AffineIn s a t t' -> Repr' s a t -> IO (Repr' s a t')
 affineIn (AffineIn (Repr' bias) weights) input = do
   Repr' l <- linearIn weights input
   b <- makeBinary (+) bias l
@@ -165,14 +165,9 @@ affineIn (AffineIn (Repr' bias) weights) input = do
 
 data DecodeParams s a t = DecodeParams (POP (AffineIn s a t) (Code t))
 
-decodeParent :: POP (AffineIn s a t) (Code t) -> Repr' s a t -> IO (SOP (Repr' s a) (Code t))
-decodeParent = undefined
-
-{- exactly the same as an Encoding
-data Decoding s a t where
-  PrimitiveDecoding :: Repr a (Size s t) -> Decoding s a t
-  GenericDecoding :: Generic t => Repr a (Size s t) ->
--}
+decodeParent :: forall s a t. (Floating a, Usable a, All2 (KnownSize s) (Code t)) =>
+  POP (AffineIn s a t) (Code t) -> Repr' s a t -> IO (SOP (Repr' s a) (Code t))
+decodeParent params parent = _ $ cliftA_POP (Proxy::Proxy (KnownSize s)) (Comp . flip affineIn parent) params
 
 newtype Decoder s a t = Decoder { runDecoder :: Repr' s a t -> IO t }
 
