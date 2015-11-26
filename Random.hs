@@ -24,7 +24,7 @@ import Data.Functor.Classes
 import Control.Monad.Free
 import Control.Monad.Free.Church
 
-import NumericPrelude hiding (foldl')
+import NumericPrelude
 import qualified Algebra.Ring as Ring
 import qualified Algebra.Module as Module
 import qualified Algebra.Field as Field
@@ -108,7 +108,7 @@ instance (Field.C w) => MonadDiscrete w (F (Discrete w)) where
 
 class (Monad m) => MonadBit m where
   bit :: m Bool
-  
+
   default bit :: MonadFree Bin m => m Bool
   bit = liftF $ Bin False True
 
@@ -130,6 +130,5 @@ test = do
 test2 :: (Functor m, MonadBit m) => m Int
 test2 = do
   x <- bit
-  y <- if x then (return 1) else ifBit 1 2 
+  y <- if x then (return 1) else ifBit 1 2
   return (y + 1)
-

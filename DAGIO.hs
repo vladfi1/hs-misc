@@ -72,12 +72,15 @@ resetNode Node{inputs, updated} = do
     rtraverse_ (\n -> Const <$> resetNode n) inputs
     writeIORef updated False
 
-evalNode :: Node output -> IO (Identity output)
-evalNode Source{source} = readIORef source
-evalNode Node{..} = do
+evalNode' :: Node output -> IO (Identity output)
+evalNode' Source{source} = readIORef source
+evalNode' Node{..} = do
   done <- readIORef updated
   unless done $ do
-    ins <- rtraverse evalNode inputs
+    ins <- rtraverse evalNode' inputs
     writeIORef output (forward ins)
     writeIORef updated True
   readIORef output
+
+evalNode :: Node output -> IO output
+evalNode node = getIdentity <$> evalNode' node
