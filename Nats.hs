@@ -110,12 +110,19 @@ instance SNum ('KProxy :: KProxy Nat) where
       0 -> unsafeCoerce SZ
       _ -> unsafeCoerce $ SS (sFromInteger $ sPred n)
 
+instance Real Nat where
+  toRational = toRational . fromEnum
 
+instance Integral Nat where
+  quotRem a b = (fromInteger q, fromInteger r)
+    where (q, r) = quotRem (toInteger a) (toInteger b)
+  toInteger = toInteger . fromEnum
+
+{-
 type family Sum (xs :: [Nat]) :: Nat where
   Sum '[] = Z
   Sum (x ': xs) = x :+ (Sum xs)
 
-{-
 infixl 7 :/:
 type family (x :: Nat) :/: (y :: Nat) :: Nat where
   Z :/: y = Z -- avoid infinite loops
