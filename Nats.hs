@@ -107,3 +107,8 @@ data LTE n where
 data LT n where
   LT_Z :: LT (S n)
   LT_S :: LT n -> LT (S n)
+
+lts :: SNat n -> [LT n]
+lts SZ = []
+lts (SS n) = LT_Z : map LT_S (lts n)
+

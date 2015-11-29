@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module JavaDAG where
 
@@ -16,6 +17,7 @@ import Language.Java.Parser
 import Generics.SOP
 import Generics.SOP.NP
 import Data.Vinyl
+import Data.Singletons.Prelude hiding (And)
 
 import Data.Default
 import DefaultM
@@ -37,14 +39,14 @@ unsafeIndex a (x:xs) =
   if a == x then 0
     else 1 + unsafeIndex a xs
 
-data Java
+data Java (p :: Nat)
 
 type family JavaSize t where
-  JavaSize Char = 95
-  JavaSize Int = 1
-  JavaSize Integer = 1
-  JavaSize Double = 1
-  JavaSize t = 50
+  JavaSize Char = FromInteger 95
+  JavaSize Int = FromInteger 1
+  JavaSize Integer = FromInteger 1
+  JavaSize Double = FromInteger 1
+  JavaSize t = FromInteger 50
 
 type instance Size Java t = JavaSize t
 
@@ -77,7 +79,7 @@ testEncoding = do
   encode parsed
 
 decodeParams :: (Default a, Usable a) => IO (NP (DecodeParams Java a) GenericTypes)
-decodeParams = sequence'_NP $ cpure_NP (Proxy::Proxy (And (KnownSize Java) (KnownSizes Java))) (Comp defM)
+decodeParams = sequence'_NP $ cpure_NP (Proxy::Proxy (And (KnownCode Java) (And (KnownSize Java) (KnownSizes Java)))) (Comp defM)
 
 decodeChar :: forall a. (Real a, Usable a) => Decoder Java a Char
 decodeChar = Decoder f where
