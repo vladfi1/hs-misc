@@ -5,8 +5,9 @@
 module Vec where
 
 import Prelude hiding (replicate, reverse, concat)
+import Data.Singletons.Prelude
+
 import Zippable
-import Generics.SOP.Sing
 import Nats
 import Data.Default
 import Data.Foldable (toList)
@@ -16,8 +17,8 @@ data Vec n a where
   VCons :: a -> Vec n a -> Vec (S n) a
 
 index :: LT n -> Vec n a -> a
-index ZLT (VCons a _) = a
-index (SLT n) (VCons _ l) = index n l
+index LT_Z (VCons a _) = a
+index (LT_S n) (VCons _ l) = index n l
 
 instance Functor (Vec n) where
   fmap f VNil = VNil
@@ -53,7 +54,7 @@ instance Show a => Show (Vec n a) where
 instance (SingI n, Default a) => Default (Vec n a) where
   def = pure def
 
-append :: Vec n a -> Vec m a -> Vec (n :+: m) a
+append :: Vec n a -> Vec m a -> Vec (n :+ m) a
 append VNil v = v
 append (VCons a v1) v2 = VCons a (append v1 v2)
 
@@ -66,6 +67,6 @@ lookup :: Eq a => a -> Vec n a -> Maybe (LT n)
 lookup _ VNil = Nothing
 lookup a (VCons h t) =
   if a == h
-    then Just ZLT
-    else SLT <$> Vec.lookup a t
+    then Just LT_Z
+    else LT_S <$> Vec.lookup a t
 

@@ -4,14 +4,16 @@
 {-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module List where
 
 import Data.Vinyl
 import Data.Type.Equality
 import Nats
---import Generics.SOP.Sing
 import Data.Singletons.Prelude
+import Data.Singletons.TH
 
 {-
 data SList l where
@@ -55,10 +57,9 @@ instance {-# OVERLAPS #-} Find (a ': l) a where
 instance Find l a => Find (b ': l) a where
   find = SIndex find
 
-type family Len (l :: [k]) :: Nat where
-  Len '[] = Z
-  Len (a ': l) = S (Len l)
+$(singletons [d|
+  len :: [a] -> Nat
+  len [] = Z
+  len (x:xs) = S (len xs)
+  |])
 
-reifyLen :: SList l -> SNat (Len l)
-reifyLen SNil = SZ
-reifyLen (SCons _ l) = SS $ reifyLen l
