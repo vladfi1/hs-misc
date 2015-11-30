@@ -10,7 +10,7 @@ module Grammar where
 import Generics.SOP
 import Generics.SOP.Dict
 import Data.Singletons.Prelude hiding (All)
-import List
+import List (Find)
 
 class (Generic t, All2 (Find ts) (Code t)) => Contained ts t
 instance (Generic t, All2 (Find ts) (Code t)) => Contained ts t
