@@ -42,7 +42,6 @@ class SingI (Size s t) => KnownSize s t
 instance SingI (Size s t) => KnownSize s t
 
 newtype Repr a dim = Repr { runRepr :: Node (Tensor a '[dim]) }
-  --deriving (Show)
 
 newtype Linear a outDim inDim = Linear (Node (Tensor a '[outDim, inDim]))
   --deriving (Show)
@@ -76,27 +75,27 @@ encodeParent :: (Floating a, Usable a, IntegralN outDim, SingI outDim) =>
 encodeParent params (SOP sop) = Repr <$> (makeUnary (tmap tanh) =<< (collapse_NS $ liftA2_NS' affine' params sop))
   where affine' p i = K $ affine p i
 
-data Encoding s a t where
-  Primitive :: Repr a (Size s t) -> Encoding s a t
-  Generic :: (Generic t) => Repr a (Size s t) -> SOP (Encoding s a) (Code t) -> Encoding s a t
+data Encoding a s t where
+  Primitive :: Repr a (Size s t) -> Encoding a s t
+  Generic :: (Generic t) => Repr a (Size s t) -> SOP (Encoding a s) (Code t) -> Encoding a s t
 
-getRepr :: Encoding s a t -> Repr a (Size s t)
+getRepr :: Encoding a s t -> Repr a (Size s t)
 getRepr (Primitive repr) = repr
 getRepr (Generic repr _) = repr
 
 -- no way to write these with combinators?
-getReprNP :: NP (Encoding s a) ts -> NP (Repr a) (MapSize s ts)
+getReprNP :: NP (Encoding a s) ts -> NP (Repr a) (MapSize s ts)
 getReprNP Nil = Nil
 getReprNP (e :* es) = getRepr e :* getReprNP es
 
-getReprSOP' :: NS (NP (Encoding s a)) ts -> NS (NP (Repr a)) (MapSize2 s ts)
+getReprSOP' :: NS (NP (Encoding a s)) ts -> NS (NP (Repr a)) (MapSize2 s ts)
 getReprSOP' (S es) = S $ getReprSOP' es
 getReprSOP' (Z es) = Z $ getReprNP es
 
-getReprSOP :: SOP (Encoding s a) ts -> SOP (Repr a) (MapSize2 s ts)
+getReprSOP :: SOP (Encoding a s) ts -> SOP (Repr a) (MapSize2 s ts)
 getReprSOP (SOP sop) = SOP $ getReprSOP' sop
 
-newtype EncodeParams s a t =
+newtype EncodeParams a s t =
   EncodeParams { runEncodeParams :: NP (Affine a (Size s t)) (MapSize2 s (Code t)) }
 
 --deriving instance (SListI (MapSize2 (Code t))) => Show (EncodeParams t a)
@@ -104,13 +103,13 @@ newtype EncodeParams s a t =
 class (Generic t, KnownSize s t, All2 SingI (MapSize2 s (Code t))) => HasParams s t
 instance (Generic t, KnownSize s t, All2 SingI (MapSize2 s (Code t))) => HasParams s t
 
-instance (Default a, Usable a, HasParams s t, IntegralS s) => DefaultM IO (EncodeParams s a t) where
+instance (Default a, Usable a, HasParams s t, IntegralS s) => DefaultM IO (EncodeParams a s t) where
   defM = EncodeParams <$> sequence'_NP (cpure_NP (Proxy::Proxy (All SingI)) (Comp defM))
 
-newtype Encoder s a t = Encoder { runEncoder :: t -> IO (Encoding s a t) }
+newtype Encoder a s t = Encoder { runEncoder :: t -> IO (Encoding a s t) }
 
-encodeRec :: forall ts s a t. (Floating a, Usable a, KnownSize s t, IntegralS s) =>
-  Rec (Encoder s a) ts -> Dict (Contained ts) t -> EncodeParams s a t -> Encoder s a t
+encodeRec :: forall ts a s t. (Floating a, Usable a, KnownSize s t, IntegralS s) =>
+  Rec (Encoder a s) ts -> Dict (Contained ts) t -> EncodeParams a s t -> Encoder a s t
 
 encodeRec encoders Dict (EncodeParams params) = Encoder f where
   encoders' = cpure_POP (Proxy::Proxy (Find ts)) (Fn $ Comp . runEncoder (index find encoders) . unI)
@@ -120,8 +119,8 @@ encodeRec encoders Dict (EncodeParams params) = Encoder f where
     parent <- encodeParent params childReprs
     return $ Generic parent children
 
-makeEncoders :: forall p g s a. (Floating a, Usable a, IntegralS s, All (KnownSize s) g) =>
-  Complete p g -> NP (EncodeParams s a) g -> Rec (Encoder s a) p -> Rec (Encoder s a) (p :++ g)
+makeEncoders :: forall p g a s. (Floating a, Usable a, IntegralS s, All (KnownSize s) g) =>
+  Complete p g -> NP (EncodeParams a s) g -> Rec (Encoder a s) p -> Rec (Encoder a s) (p :++ g)
 makeEncoders complete params prim = fix f where
   f encoders = rAppend prim $ np2Rec (cliftA2_NP (Proxy::Proxy (KnownSize s)) (encodeRec encoders) (unAll_NP complete) params)
 
@@ -129,25 +128,25 @@ makeEncoder complete params prim = f where
   encoders = makeEncoders complete params prim
   f t = runEncoder (index find encoders) t
 
-newtype Repr' s a t = Repr' { runRepr' :: Node (Tensor a '[Size s t]) }
+newtype Repr' a s t = Repr' { runRepr' :: Node (Tensor a '[Size s t]) }
 
-instance (Default a, Usable a, KnownSize s t, IntegralS s) => DefaultM IO (Repr' s a t) where
+instance (Default a, Usable a, KnownSize s t, IntegralS s) => DefaultM IO (Repr' a s t) where
   defM = Repr' <$> defM
 
-newtype LinearIn s a t t' = LinearIn (Node (Tensor a '[Size s t', Size s t]))
+newtype LinearIn a s t t' = LinearIn (Node (Tensor a '[Size s t', Size s t]))
 
-instance (Default a, Usable a, IntegralS s, KnownSize s t, KnownSize s t') => DefaultM IO (LinearIn s a t t') where
+instance (Default a, Usable a, IntegralS s, KnownSize s t, KnownSize s t') => DefaultM IO (LinearIn a s t t') where
   defM = LinearIn <$> defM
 
-linearIn :: Numeric a => LinearIn s a t t' -> Repr' s a t -> IO (Repr' s a t')
+linearIn :: Numeric a => LinearIn a s t t' -> Repr' a s t -> IO (Repr' a s t')
 linearIn (LinearIn m) (Repr' v) = Repr' <$> makeBinary mv m v
 
-data AffineIn s a t t' = AffineIn (Repr' s a t') (LinearIn s a t t')
+data AffineIn a s t t' = AffineIn (Repr' a s t') (LinearIn a s t t')
 
-instance (Default a, Usable a, IntegralS s, KnownSize s t, KnownSize s t') => DefaultM IO (AffineIn s a t t') where
+instance (Default a, Usable a, IntegralS s, KnownSize s t, KnownSize s t') => DefaultM IO (AffineIn a s t t') where
   defM = AffineIn <$> defM <*> defM
 
-affineIn :: (Floating a, Usable a, IntegralS s, KnownSize s t') => AffineIn s a t t' -> Repr' s a t -> IO (Repr' s a t')
+affineIn :: (Floating a, Usable a, IntegralS s, KnownSize s t') => AffineIn a s t t' -> Repr' a s t -> IO (Repr' a s t')
 affineIn (AffineIn (Repr' bias) weights) input = do
   Repr' l <- linearIn weights input
   b <- makeBinary (+) bias l
@@ -166,14 +165,14 @@ affine' (Affine' bias weight) (Repr input) = do
   b <- makeBinary (+) bias l
   Repr <$> makeUnary (tmap tanh) b
 
-data DecodeParams s a t =
-  DecodeParams (Affine' a (Length (Code t)) (Size s t)) (POP (AffineIn s a t) (Code t))
+data DecodeParams a s t =
+  DecodeParams (Affine' a (Length (Code t)) (Size s t)) (POP (AffineIn a s t) (Code t))
 
-instance (Default a, Usable a, KnownCode s t, KnownSize s t, KnownSizes s t) => DefaultM IO (DecodeParams s a t) where
+instance (Default a, Usable a, KnownCode s t, KnownSize s t, KnownSizes s t) => DefaultM IO (DecodeParams a s t) where
   defM = DecodeParams <$> defM <*> sequence'_POP (cpure_POP (Proxy::Proxy (KnownSize s)) (Comp defM))
 
-decodeParent :: forall s a t. (Real a, Floating a, Usable a, All2 (KnownSize s) (Code t), KnownCode s t) =>
-  DecodeParams s a t -> Repr' s a t -> IO (SOP (Repr' s a) (Code t))
+decodeParent :: forall a s t. (Real a, Floating a, Usable a, All2 (KnownSize s) (Code t), KnownCode s t) =>
+  DecodeParams a s t -> Repr' a s t -> IO (SOP (Repr' a s) (Code t))
 decodeParent (DecodeParams aff params) parent = do
   Repr node <- affine' aff (Repr $ runRepr' parent)
   Vector v <- evalNode node
@@ -184,7 +183,7 @@ decodeParent (DecodeParams aff params) parent = do
   child <- sample $ zip children weights
   sequence'_SOP $ SOP child
 
-newtype Decoder s a t = Decoder { runDecoder :: Repr' s a t -> IO t }
+newtype Decoder a s t = Decoder { runDecoder :: Repr' a s t -> IO t }
 
 class All2 (KnownSize s) (Code t) => KnownSizes s t
 instance All2 (KnownSize s) (Code t) => KnownSizes s t
@@ -192,8 +191,8 @@ instance All2 (KnownSize s) (Code t) => KnownSizes s t
 class SingI (FromInteger (Length (Code t)) :: k) => KnownCode (s :: k -> *) t
 instance SingI (FromInteger (Length (Code t)) :: k) => KnownCode (s :: k -> *) t
 
-decodeRec :: forall ts s a t. (Real a, Floating a, Usable a, KnownSizes s t, KnownCode s t) =>
-  Rec (Decoder s a) ts -> Dict (Contained ts) t -> DecodeParams s a t -> Decoder s a t
+decodeRec :: forall ts a s t. (Real a, Floating a, Usable a, KnownSizes s t, KnownCode s t) =>
+  Rec (Decoder a s) ts -> Dict (Contained ts) t -> DecodeParams a s t -> Decoder a s t
 
 decodeRec decoders Dict params = Decoder f where
   decoders' = cpure_POP (Proxy::Proxy (Find ts)) (Fn $ Comp . (I <$>) . runDecoder (index find decoders))
@@ -202,16 +201,16 @@ decodeRec decoders Dict params = Decoder f where
     children <- sequence_SOP' (ap_SOP decoders' childReprs)
     return $ to children
 
-makeDecoders :: forall p g s a. (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
-  Complete p g -> NP (DecodeParams s a) g -> Rec (Decoder s a) p -> Rec (Decoder s a) (p :++ g)
+makeDecoders :: forall p g a s. (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
+  Complete p g -> NP (DecodeParams a s) g -> Rec (Decoder a s) p -> Rec (Decoder a s) (p :++ g)
 makeDecoders complete params prim = fix f where
   f decoders = rAppend prim $ np2Rec (cliftA2_NP (Proxy::Proxy (And (KnownSizes s) (KnownCode s))) (decodeRec decoders) (unAll_NP complete) params)
 
-newtype AnyDecoder s a ts = AnyDecoder { runAnyDecoder :: forall t. Find ts t => Repr' s a t -> IO t }
+newtype AnyDecoder a s ts = AnyDecoder { runAnyDecoder :: forall t. Find ts t => Repr' a s t -> IO t }
 
-makeDecoder :: forall p g s a. (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
-  Complete p g -> NP (DecodeParams s a) g -> Rec (Decoder s a) p -> AnyDecoder s a (p :++ g)
+makeDecoder :: forall p g a s. (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
+  Complete p g -> NP (DecodeParams a s) g -> Rec (Decoder a s) p -> AnyDecoder a s (p :++ g)
 makeDecoder complete params prim = AnyDecoder f where
   decoders = makeDecoders complete params prim
-  f :: forall t. Find (p :++ g) t => Repr' s a t -> IO t
+  f :: forall t. Find (p :++ g) t => Repr' a s t -> IO t
   f t = runDecoder (index find decoders) t
