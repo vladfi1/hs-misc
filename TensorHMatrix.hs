@@ -15,6 +15,8 @@ import Data.Vector.Storable
 import Data.Default
 import Data.Singletons.Prelude
 
+import Prelude hiding (zipWith)
+
 type Usable a = (Element a, Num a, Numeric a, Num (Vector a), Container Vector a)
 
 type IntegralK (p :: KProxy k) = (SingKind p, (Integral (DemoteRep p)))
@@ -33,14 +35,14 @@ deriving instance (Show a, Element a) => Show (Tensor a dims)
 instance (Default a) => Default (Tensor a '[]) where
   def = Scalar def
 
+fill1 :: forall a n. (SingI n, IntegralN n, Usable a) => a -> Tensor a '[n]
+fill1 a = Vector $ konst a (natVal' (sing::Sing n))
+
 instance (SingI n, IntegralN n, Default a, Usable a) => Default (Tensor a '[n]) where
-  def = Vector $ konst def (natVal' (sing::Sing n))
+  def = fill1 def
 
 instance (SingI n, IntegralN n, SingI m, Default a, Usable a) => Default (Tensor a '[n, m]) where
   def = Matrix $ konst def (natVal' (sing::Sing n), natVal' (sing::Sing m))
-
-fill1 :: forall a n. (SingI n, IntegralN n, Usable a) => a -> Tensor a '[n]
-fill1 a = Vector $ konst a (natVal' (sing::Sing n))
 
 instance Num a => Num (Tensor a '[]) where
   Scalar a + Scalar b = Scalar (a + b)
@@ -84,8 +86,14 @@ tmap f (Scalar a) = Scalar $ f a
 tmap f (Vector v) = Vector $ cmap f v
 tmap f (Matrix m) = Matrix $ cmap f m
 
+tZipWith :: (Storable a, Storable b, Storable c) => (a -> b -> c) -> Tensor a '[n] -> Tensor b '[n] -> Tensor c '[n]
+tZipWith f (Vector a) (Vector b) = Vector (zipWith f a b)
+
 transpose :: (Numeric a) => Tensor a '[n, m] -> Tensor a '[m, n]
 transpose (Matrix m) = Matrix (tr m)
+
+dot :: (Storable a, Num a) => Tensor a '[n] -> Tensor a '[n] -> a
+dot (Vector a) (Vector b) = foldl' (+) 0 (zipWith (*) a b)
 
 mv :: Numeric a => Tensor a '[n, m] -> Tensor a '[m] -> Tensor a '[n]
 mv (Matrix m) (Vector v) = Vector $ m #> v

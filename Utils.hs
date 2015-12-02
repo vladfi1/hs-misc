@@ -27,13 +27,13 @@ showAsList :: [String] -> String
 showAsList strs = "[" ++ intercalate ", " strs ++ "]"
 
 -- utilites for conversion between Vinyl and SOP
-rec2NP :: Rec f xs -> NP f xs
-rec2NP RNil = Nil
-rec2NP (fx :& fxs) = fx :* rec2NP fxs
+rec2np :: Rec f xs -> NP f xs
+rec2np RNil = Nil
+rec2np (fx :& fxs) = fx :* rec2np fxs
 
-np2Rec :: NP f xs -> Rec f xs
-np2Rec Nil = RNil
-np2Rec (fx :* fxs) = fx :& np2Rec fxs
+np2rec :: NP f xs -> Rec f xs
+np2rec Nil = RNil
+np2rec (fx :* fxs) = fx :& np2rec fxs
 
 -- like liftA_NP but without the constraints
 liftA_NP' :: (forall a. f a -> g a) -> NP f xs -> NP g xs
@@ -77,6 +77,10 @@ sequence_SOP' (SOP (S ns)) = SOP . S . unSOP <$> sequence_SOP' (SOP ns)
 np2ns :: NP f xs -> [NS f xs]
 np2ns Nil = []
 np2ns (fx :* fxs) = Z fx : map S (np2ns fxs)
+
+ns2int :: NS f xs -> Int
+ns2int (Z _) = 0
+ns2int (S xs) = succ (ns2int xs)
 
 newtype FK f b a = FK (f a)
 

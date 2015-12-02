@@ -113,16 +113,14 @@ encodeRec encoders Dict params = Encoder f where
 makeEncoders :: forall p g a s. (Floating a, Usable a, IntegralS s, All (KnownSize s) g) =>
   Complete p g -> NP (EncodeParams a s) g -> Rec (Encoder a s) p -> Rec (Encoder a s) (p :++ g)
 makeEncoders complete params prim = fix f where
-  f encoders = rAppend prim $ np2Rec (cliftA2_NP (Proxy::Proxy (KnownSize s)) (encodeRec encoders) (unAll_NP complete) params)
+  f encoders = rAppend prim $ np2rec (cliftA2_NP (Proxy::Proxy (KnownSize s)) (encodeRec encoders) (unAll_NP complete) params)
 
 newtype AnyEncoder a s ts = AnyEncoder { runAnyEncoder :: forall t. Find ts t => t -> IO (Encoding a s t) }
 
-makeEncoder :: forall p g a s. (Floating a, Usable a, IntegralS s, All (KnownSize s) g) =>
+makeEncoder :: (Floating a, Usable a, IntegralS s, All (KnownSize s) g) =>
   Complete p g -> NP (EncodeParams a s) g -> Rec (Encoder a s) p -> AnyEncoder a s (p :++ g)
-makeEncoder complete params prim = AnyEncoder f where
-  encoders = makeEncoders complete params prim
-  f :: forall t. Find (p :++ g) t => t -> IO (Encoding a s t)
-  f t = runEncoder (index find encoders) t
+makeEncoder complete params prim = AnyEncoder $ runEncoder (index find encoders)
+  where encoders = makeEncoders complete params prim
 
 newtype LinearIn a s t t' = LinearIn (Node (Tensor a '[Size s t', Size s t]))
 
@@ -150,11 +148,13 @@ data Affine' a outDim inDim =
 instance (Default a, Usable a, IntegralN outDim, SingI outDim, SingI inDim) => DefaultM IO (Affine' a outDim inDim) where
   defM = Affine' <$> defM <*> defM
 
+sigmoid x = 1 / (1 + exp (-x))
+
 affine' :: (Floating a, Usable a, IntegralN outDim, SingI outDim) => Affine' a outDim inDim -> Repr a inDim -> IO (Repr a outDim)
 affine' (Affine' bias weight) (Repr input) = do
   l <- makeBinary mv weight input
   b <- makeBinary (+) bias l
-  Repr <$> makeUnary (tmap tanh) b
+  Repr <$> makeUnary (tmap sigmoid) b
 
 data DecodeParams a s t =
   DecodeParams (Affine' a (Length (Code t)) (Size s t)) (POP (AffineIn a s t) (Code t))
@@ -192,16 +192,80 @@ decodeRec decoders Dict params = Decoder f where
 makeDecoders :: forall p g a s. (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
   Complete p g -> NP (DecodeParams a s) g -> Rec (Decoder a s) p -> Rec (Decoder a s) (p :++ g)
 makeDecoders complete params prim = fix f where
-  f decoders = rAppend prim $ np2Rec (cliftA2_NP (Proxy::Proxy (And (KnownSizes s) (KnownCode s))) (decodeRec decoders) (unAll_NP complete) params)
+  f decoders = rAppend prim $ np2rec (cliftA2_NP (Proxy::Proxy (And (KnownSizes s) (KnownCode s))) (decodeRec decoders) (unAll_NP complete) params)
 
 newtype AnyDecoder a s ts = AnyDecoder { runAnyDecoder :: forall t. Find ts t => ReprT a s t -> IO t }
 
-makeDecoder :: forall p g a s. (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
+makeDecoder :: (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
   Complete p g -> NP (DecodeParams a s) g -> Rec (Decoder a s) p -> AnyDecoder a s (p :++ g)
-makeDecoder complete params prim = AnyDecoder f where
-  decoders = makeDecoders complete params prim
-  f :: forall t. Find (p :++ g) t => ReprT a s t -> IO t
-  f t = runDecoder (index find decoders) t
+makeDecoder complete params prim = AnyDecoder $ runDecoder (index find decoders)
+  where decoders = makeDecoders complete params prim
 
---newtype AutoEncoder a s t = AutoEncoder { runAutoEncoder :: t -> IO (Node 
+newtype AutoDecoder a s t = AutoDecoder { runAutoDecoder :: Encoding a s t -> IO (Node a) }
+
+autoDecodeRec :: forall ts a s t. (Floating a, Usable a, KnownCode s t, All2 (KnownSize s) (Code t)) =>
+  Rec (AutoDecoder a s) ts -> Dict (Contained ts) t -> DecodeParams a s t -> AutoDecoder a s t
+
+autoDecodeRec autoDecoders Dict (DecodeParams aff params) = AutoDecoder f where
+  autoDecoders' = cpure_POP (Proxy::Proxy (Find ts)) (Fn $ Comp . (K <$>) . runAutoDecoder (index find autoDecoders))
+  f (Generic parent children) = do
+    Repr node <- affine' aff (Repr $ runReprT parent)
+    let i = ns2int (unSOP children)
+    
+    prob <- makeUnary (\(Vector v) -> v Vector.! i) node
+    log_prob <- makeUnary log prob
+    
+    let childReprs = liftA_SOP getRepr children
+    let decodings = cliftA_POP (Proxy::Proxy (KnownSize s)) (Comp . flip affineIn parent) params
+    
+    let dist :: forall t'. KnownSize s t' => (IO :.: ReprT a s) t' -> ReprT a s t' -> (IO :.: K (Node a)) t'
+        dist dIO (ReprT c) = Comp $ do
+          ReprT d <- unComp dIO
+          diff <- makeBinary (-) d c
+          norm <- makeBinary dot diff diff
+          return $ K norm
+    
+    norms <- collapse_SOP <$> (sequence_SOP' $ cliftA2_SOP (Proxy::Proxy (KnownSize s)) dist decodings childReprs)
+    
+    childNodes <- collapse_SOP <$> sequence_SOP' (ap_SOP autoDecoders' children)
+    
+    foldM (makeBinary (+)) log_prob (childNodes ++ norms)
+
+primAutoDecoder :: Num a => AutoDecoder a s t
+primAutoDecoder = AutoDecoder f where
+  f (Primitive _) = makeSource 0
+
+makeAutoDecoders :: forall proxy p g a s. (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
+  Complete p g -> NP (DecodeParams a s) g -> Rec (AutoDecoder a s) p -> Rec (AutoDecoder a s) (p :++ g)
+makeAutoDecoders complete params prim = fix f where
+  --prim = np2rec $ pure_NP primitiveAutoDecoder :: Rec _ p
+  f autoDecoders = rAppend prim $ np2rec (cliftA2_NP (Proxy::Proxy (And (KnownSizes s) (KnownCode s))) (autoDecodeRec autoDecoders) (unAll_NP complete) params)
+
+newtype AnyAutoDecoder a s ts = AnyAutoDecoder { runAnyAutoDecoder :: forall t. Find ts t => Encoding a s t -> IO (Node a) }
+
+makeAutoDecoder :: (Real a, Floating a, Usable a, All (And (KnownSizes s) (KnownCode s)) g) =>
+  Complete p g -> NP (DecodeParams a s) g -> Rec (AutoDecoder a s) p -> AnyAutoDecoder a s (p :++ g)
+makeAutoDecoder complete params prim = AnyAutoDecoder $ runAutoDecoder (index find autoDecoders)
+  where autoDecoders = makeAutoDecoders complete params prim
+
+newtype AutoEncoder a s t = AutoEncoder { runAutoEncoder :: t -> IO (Node a) }
+
+makeAutoEncoders :: forall p g a s. (Real a, Floating a, Usable a, All (KnownSize s) g, All (And (KnownSizes s) (KnownCode s)) g) =>
+  Complete p g -> NP (EncodeParams a s) g -> Rec (Encoder a s) p -> NP (DecodeParams a s) g -> Rec (AutoDecoder a s) p -> Rec (AutoEncoder a s) (p :++ g)
+
+makeAutoEncoders complete encodeParams primEncoders decodeParams primAutoDecoders = autoEncoders where
+  encoders = makeEncoders complete encodeParams primEncoders
+  autoDecoders = makeAutoDecoders complete decodeParams primAutoDecoders
+  
+  makeAutoEncoder (Encoder e) (AutoDecoder d) = AutoEncoder f where
+    f t = e t >>= d
+  
+  autoEncoders = rZipWith makeAutoEncoder encoders autoDecoders
+
+newtype AnyAutoEncoder a s ts = AnyAutoEncoder { runAnyAutoEncoder :: forall t. Find ts t => t -> IO (Node a) }
+
+makeAutoEncoder :: (Real a, Floating a, Usable a, All (KnownSize s) g, All (And (KnownSizes s) (KnownCode s)) g) =>
+  Complete p g -> NP (EncodeParams a s) g -> Rec (Encoder a s) p -> NP (DecodeParams a s) g -> Rec (AutoDecoder a s) p -> AnyAutoEncoder a s (p :++ g)
+makeAutoEncoder complete encodeParams primEncoders decodeParams primAutoDecoders = AnyAutoEncoder $ runAutoEncoder (index find autoEncoders)
+  where autoEncoders = makeAutoEncoders complete encodeParams primEncoders decodeParams primAutoDecoders
 
