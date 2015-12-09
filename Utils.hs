@@ -184,3 +184,4 @@ liftA_FSOP f (FlipSOP sop) = FlipSOP (liftA_FNS (liftA_FNP f) sop)
 
 collapse_FSOP :: FlipSOP (FK f) bs a -> [f a]
 collapse_FSOP (FlipSOP sop) = unComp . collapse_FNS $ liftA_FNS (FK . Comp . collapse_FNP) sop
+

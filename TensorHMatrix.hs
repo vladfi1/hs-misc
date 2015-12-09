@@ -15,6 +15,8 @@ import Data.Vector.Storable
 import Data.Default
 import Data.Singletons.Prelude
 
+import Data.Vinyl
+
 import Prelude hiding (zipWith)
 
 type Usable a = (Element a, Num a, Numeric a, Num (Vector a), Container Vector a)
@@ -97,6 +99,8 @@ dot (Vector a) (Vector b) = foldl' (+) 0 (zipWith (*) a b)
 
 mv :: Numeric a => Tensor a '[n, m] -> Tensor a '[m] -> Tensor a '[n]
 mv (Matrix m) (Vector v) = Vector $ m #> v
+
+gradMV :: Numeric a => Tensor a '[n, m] -> Tensor a '[m] -> Tensor a '[n]
 
 oneHot :: forall a n. (SingI n, IntegralN n, Usable a) => Int -> Tensor a '[n]
 oneHot m = Vector $ (konst 0 (natVal' (sing::Sing n))) // [(m, 1)]

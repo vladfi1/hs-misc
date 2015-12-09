@@ -16,3 +16,7 @@ rZipWith f (fa :& fl) (ga :& gl) = f fa ga :& rZipWith f fl gl
 rAppend :: Rec f l -> Rec f l' -> Rec f (l :++ l')
 rAppend RNil l' = l'
 rAppend (a :& l) l' = a :& rAppend l l'
+
+liftA2_ :: Applicative h => (forall x. f x -> g x -> h ()) -> Rec f rs -> Rec g rs -> h ()
+liftA2_ f (fx :& fxs) (gx :& gxs) = f fx gx *> liftA2_ f fxs gxs
+liftA2_ _ RNil RNil = pure ()

@@ -55,3 +55,4 @@ instance Uncurry Z f '[] r r where
 
 --instance Uncurry n f l r c => Uncurry (S n) f (a ': l) r (a -> c) where
 --  uncurry (SS n) f (Identity a :& args) = uncurry n (f a) args
+
