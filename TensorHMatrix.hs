@@ -21,7 +21,7 @@ import Prelude hiding (zipWith)
 
 type Usable a = (Element a, Num a, Numeric a, Num (Vector a), Container Vector a)
 
-type IntegralK (p :: KProxy k) = (SingKind p, (Integral (DemoteRep p)))
+type IntegralK (p :: KProxy k) = (SingKind p, Integral (DemoteRep p))
 type IntegralN (n :: k) = IntegralK ('KProxy :: KProxy k)
 
 natVal' :: (Num a, IntegralN n) => Sing n -> a
@@ -92,15 +92,29 @@ tZipWith :: (Storable a, Storable b, Storable c) => (a -> b -> c) -> Tensor a '[
 tZipWith f (Vector a) (Vector b) = Vector (zipWith f a b)
 
 transpose :: (Numeric a) => Tensor a '[n, m] -> Tensor a '[m, n]
-transpose (Matrix m) = Matrix (tr m)
+transpose (Matrix m) = Matrix (tr' m)
 
-dot :: (Storable a, Num a) => Tensor a '[n] -> Tensor a '[n] -> a
-dot (Vector a) (Vector b) = foldl' (+) 0 (zipWith (*) a b)
+dot :: (Storable a, Numeric a) => Tensor a '[n] -> Tensor a '[n] -> a
+dot (Vector a) (Vector b) = a <.> b
 
 mv :: Numeric a => Tensor a '[n, m] -> Tensor a '[m] -> Tensor a '[n]
 mv (Matrix m) (Vector v) = Vector $ m #> v
 
-gradMV :: Numeric a => Tensor a '[n, m] -> Tensor a '[m] -> Tensor a '[n]
+mm :: Numeric a => Tensor a '[n, m] -> Tensor a '[m, k] -> Tensor a '[n, k]
+mm (Matrix m1) (Matrix m2) = Matrix $ m1 <> m2
+
+asCol :: Storable a => Tensor a '[n] -> Tensor a '[n, FromInteger 1]
+asCol (Vector v) = Matrix $ asColumn v
+
+asRow' :: Storable a => Tensor a '[n] -> Tensor a '[FromInteger 1, n]
+asRow' (Vector v) = Matrix $ asRow v
+
+gradMV :: Numeric a => Tensor a '[n, m] -> Tensor a '[m] -> Tensor a '[n] -> (Tensor a '[n, m], Tensor a '[m])
+gradMV m v g = (mm (asCol g) (asRow' v), mv (transpose m) g)
+
+gradMM :: Numeric a => Tensor a '[n, m] -> Tensor a '[m, k] -> Tensor a '[n, k] -> (Tensor a '[n, m], Tensor a '[m, k])
+gradMM a b g = (mm g (transpose b), mm (transpose a) g)
 
 oneHot :: forall a n. (SingI n, IntegralN n, Usable a) => Int -> Tensor a '[n]
 oneHot m = Vector $ (konst 0 (natVal' (sing::Sing n))) // [(m, 1)]
+
