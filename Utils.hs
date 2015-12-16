@@ -49,6 +49,10 @@ liftA_NS' f (S fxs) = S (liftA_NS' f fxs)
 liftA_SOP' :: (forall a. f a -> g a) -> SOP f xss -> SOP g xss
 liftA_SOP' f (SOP sop) = SOP (liftA_NS' (liftA_NP' f) sop)
 
+-- like liftA_POP but without the constraints
+liftA_POP' :: (forall a. f a -> g a) -> POP f xss -> POP g xss
+liftA_POP' f (POP pop) = POP (liftA_NP' (liftA_NP' f) pop)
+
 -- like liftA2_NP but without the constraints
 liftA2_NP' :: (forall a. f a -> g a -> h a) -> NP f xs -> NP g xs -> NP h xs
 liftA2_NP' _ Nil Nil = Nil
@@ -69,6 +73,9 @@ liftA2_SOP' f (POP pop) (SOP sop) = SOP $ liftA2_SOP'' f pop sop
 
 collapse_SOP' :: SOP (K a) xs -> [a]
 collapse_SOP' (SOP sop) = collapse_NS $ liftA_NS' (K . collapse_NP) sop
+
+collapse_POP' :: POP (K a) xs -> [a]
+collapse_POP' (POP pop) = concat . collapse_NP $ liftA_NP' (K . collapse_NP) pop
 
 sequence_SOP' :: Applicative f => SOP (f :.: g) xss -> f (SOP g xss)
 sequence_SOP' (SOP (Z fgxs)) = SOP . Z <$> sequence'_NP fgxs

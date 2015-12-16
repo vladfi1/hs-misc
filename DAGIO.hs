@@ -31,6 +31,8 @@ import Prelude hiding (curry, uncurry)
 data Some f where
   Some :: f a -> Some f
 
+deriving instance Num a => Num (Identity a)
+
 data Node (output :: *) where
   Node :: Num output =>
     { forward :: HList inputs -> Identity output
@@ -41,24 +43,34 @@ data Node (output :: *) where
     , gradOutput :: IORef (Identity output)
     } -> Node output
 
---makeSource :: Num output => output -> IO (Node output)
---makeSource output = Source <$> newIORef (Identity output) <*> newIORef 0
+makeSource :: Num a => a -> IO (Node a)
+makeSource a = do
+  output' <- newIORef (Identity a)
+  updated' <- newIORef True
+  gradOutput' <- newIORef 0
+  return Node
+    { forward = \RNil -> Identity a
+    , inputs = RNil
+    , output = output'
+    , updated = updated'
+    , backwards = \RNil _ -> RNil
+    , gradOutput = gradOutput'
+    }
 
-deriving instance Num a => Num (Identity a)
+instance (Num a, Default a) => DefaultM IO (Node a) where
+    defM = makeSource def
 
-makeUnary :: Num b => (forall a. Num a => a -> a) -> Node b -> IO (Node b)
-makeUnary f = makeNode (uncurry1 f) (\inputs output -> (output * uncurry1 (diff f) inputs) :& RNil)
+-- these types are somewhat less general than would be ideal
+makeUnary :: Floating a => (forall b. Floating b => b -> b) -> Node a -> IO (Node a)
+makeUnary f = makeNode (uncurry1 f, \inputs output -> (output * uncurry1 (diff f) inputs) :& RNil)
 
-makeBinary :: Num b => (forall a. Num a => a -> a -> a) -> Node b -> Node b -> IO (Node b)
-makeBinary f = makeNode (uncurry2 f) g where
+makeBinary :: Num a => (forall b. Num b => b -> b -> b) -> Node a -> Node a -> IO (Node a)
+makeBinary f = makeNode (uncurry2 f, g) where
   g (x :& y :& RNil) output = dx :& dy :& RNil
     where [dx, dy] = map (output *) $ grad (\[a, b] -> f a b) [x, y]
 
---instance Default output => DefaultM IO (Node output) where
---    defM = Source <$> newIORef (Identity def)
-
-makeNode :: Num output => Curry Node inputs (IO (Node output)) c => (HList inputs -> Identity output) -> (HList inputs -> Identity output -> HList inputs) -> c
-makeNode f b = curry g where
+makeNode :: Num output => Curry Node inputs (IO (Node output)) c => (HList inputs -> Identity output, HList inputs -> Identity output -> HList inputs) -> c
+makeNode (f, b) = curry g where
   g inputs' = do
     ins <- rtraverse readNode inputs'
     output' <- newIORef (f ins)
@@ -93,22 +105,28 @@ evalNode :: IORef Tape -> Node output -> IO (Identity output)
 evalNode tape node@Node{..} = do
   done <- readIORef updated
   unless done $ do
-    modifyIORef tape (Some node :)
     ins <- rtraverse (evalNode tape) inputs
     writeIORef output (forward ins)
+    modifyIORef tape (Some node :)
     writeIORef updated True
   readIORef output
 
 backprop tape = traverse f tape where
   writeGrad Node{gradOutput} grad = modifyIORef gradOutput (grad +)
   
-  f Node{..} = do
+  f (Some Node{..}) = do
     ins <- rtraverse readNode inputs
     out <- readIORef gradOutput
     let gradInputs = backwards ins out
     liftA2_ writeGrad inputs gradInputs
 
-{-
+setLearningRate rate Node{..} = writeIORef gradOutput (Identity rate)
+
+learn (Some Node{..}) = do
+  grad <- readIORef gradOutput
+  writeIORef output grad
+
+{- pull-based backprop scrapped in favor of tape version
 resetGrad :: Node output -> IO ()
 resetGrad Node{gradUpdated} = do
   todo <- readIORef gradUpdated

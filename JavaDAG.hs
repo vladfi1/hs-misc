@@ -30,6 +30,8 @@ import DAGIO
 import Random
 import List
 
+import Data.IORef
+
 chars = [' ' .. '~']
 numChars = length chars -- 95
 
@@ -81,6 +83,7 @@ testEncoding = do
 decodeParams :: (Default a, Usable a) => IO (NP (DecodeParams a Java) GenericTypes)
 decodeParams = sequence'_NP $ cpure_NP (Proxy::Proxy (And (KnownCode Java) (And (KnownSize Java) (KnownSizes Java)))) (Comp defM)
 
+{-
 decodeChar :: forall a. (Real a, Usable a) => Decoder a Java Char
 decodeChar = Decoder f where
   f :: ReprT a Java Char -> IO Char
@@ -115,6 +118,7 @@ javaDecoder :: IO (AnyDecoder Float Java AllTypes)
 javaDecoder = do
   params <- decodeParams
   return $ makeDecoder javaComplete params primDecoders
+-}
 
 primAutoDecoders :: Num a => Rec (AutoDecoder a Java) PrimTypes
 primAutoDecoders = x :& x :& x :& x :& RNil where x = primAutoDecoder
@@ -126,11 +130,25 @@ makeJavaAutoEncoder = do
   return $ makeAutoEncoder javaComplete encodeParams' primEncoders decodeParams' primAutoDecoders
 
 main = do
-  autoEncoder <- makeJavaAutoEncoder
+  encodeParams' <- encodeParams
+  decodeParams' <- decodeParams
+  
+  let params = concat $ collapse_NP (liftA_NP (K . getNodes) encodeParams') ++ collapse_NP (liftA_NP (K . getNodes) decodeParams')
+   
+  let autoEncoder = makeAutoEncoder javaComplete encodeParams' primEncoders decodeParams' primAutoDecoders
 
   java <- readFile "Test.java"
   let Right parsed = parser compilationUnit java
   
   loss <- runAnyAutoEncoder autoEncoder parsed
-  evalNode loss
+  setLearningRate (-0.1) loss
+
+  tape <- newIORef []
+  
+  resetNode loss
+  evalNode tape loss
+  backprop <$> readIORef tape
+  traverse learn params
+  
+  print $ length params
 
