@@ -13,6 +13,7 @@ import Data.Vector.Storable (toList, (!))
 
 import Language.Java.Syntax
 import Language.Java.Parser
+import Language.Java.Pretty
 
 import Generics.SOP
 import Generics.SOP.NP
@@ -84,7 +85,6 @@ testEncoding = do
 decodeParams :: (Default a, Usable a) => IO (NP (DecodeParams a Java) GenericTypes)
 decodeParams = sequence'_NP $ cpure_NP (Proxy::Proxy (And (KnownCode Java) (And (KnownSize Java) (KnownSizes Java)))) (Comp defM)
 
-{-
 decodeChar :: forall a. (Real a, Usable a) => Decoder a Java Char
 decodeChar = Decoder f where
   f :: ReprT a Java Char -> IO Char
@@ -119,7 +119,6 @@ javaDecoder :: IO (AnyDecoder Float Java AllTypes)
 javaDecoder = do
   params <- decodeParams
   return $ makeDecoder javaComplete params primDecoders
--}
 
 primAutoDecoders :: Num a => Rec (AutoDecoder a Java) PrimTypes
 primAutoDecoders = x :& x :& x :& x :& RNil where x = primAutoDecoder
@@ -135,23 +134,30 @@ main = do
   decodeParams' <- decodeParams
   
   let params = concat $ collapse_NP (liftA_NP (K . getNodes) encodeParams') ++ collapse_NP (liftA_NP (K . getNodes) decodeParams')
-   
+  
+  let decoder = makeDecoder javaComplete decodeParams' primDecoders
+  
   let autoEncoder = makeAutoEncoder javaComplete encodeParams' primEncoders decodeParams' primAutoDecoders
 
   java <- readFile "Test.java"
   let Right parsed = parser compilationUnit java
+  
+  putStrLn $ prettyPrint parsed
   
   loss <- runAnyAutoEncoder autoEncoder parsed
   
   let train = do
       tape <- newIORef []
       resetNode loss
-      error <- evalNode tape loss
+      error <- evalNodeTape tape loss
       print error
       
       setLearningRate (-0.001) loss
       backprop =<< readIORef tape
       traverse learn params
-  
-  forever train
+
+  traverse (const train) [1..1000]
+
+  j :: CompilationUnit <- runAnyDecoder decoder =<< defM
+  putStrLn $ prettyPrint j
 

@@ -198,7 +198,6 @@ instance HasNodes (DecodeParams a s t) where
 instance (Default a, Usable a, KnownCode s t, KnownSize s t, KnownSizes s t) => DefaultM IO (DecodeParams a s t) where
   defM = DecodeParams <$> defM <*> sequence'_POP (cpure_POP (Proxy::Proxy (KnownSize s)) (Comp defM))
 
-{-
 decodeParent :: forall a s t. (Real a, Floating a, Floating (Vector.Vector a), Usable a, All2 (KnownSize s) (Code t), KnownCode s t) =>
   DecodeParams a s t -> ReprT a s t -> IO (SOP (ReprT a s) (Code t))
 decodeParent (DecodeParams aff params) parent = do
@@ -234,7 +233,6 @@ makeDecoder :: (Real a, Floating a, Floating (Vector.Vector a), Usable a, All (A
   Complete p g -> NP (DecodeParams a s) g -> Rec (Decoder a s) p -> AnyDecoder a s (p :++ g)
 makeDecoder complete params prim = AnyDecoder $ runDecoder (index find decoders)
   where decoders = makeDecoders complete params prim
--}
 
 newtype AutoDecoder a s t = AutoDecoder { runAutoDecoder :: Encoding a s t -> IO (Node a) }
 

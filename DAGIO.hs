@@ -87,10 +87,8 @@ makeNode (f, b) = curry g where
 
 readNode :: Node output -> IO (Identity output)
 readNode Node{output} = readIORef output
---readNode Source{source} = readIORef source
 
 resetNode :: Node output -> IO ()
---resetNode Source{} = return ()
 resetNode Node{..} = do
   todo <- readIORef updated
   when todo $ do
@@ -98,14 +96,24 @@ resetNode Node{..} = do
     writeIORef gradOutput 0
     writeIORef updated False
 
-type Tape = [Some Node]
-
-evalNode :: IORef Tape -> Node output -> IO (Identity output)
---evalNode' tape Source{..} = readIORef source
-evalNode tape node@Node{..} = do
+evalNode' :: Node output -> IO (Identity output)
+evalNode' node@Node{..} = do
   done <- readIORef updated
   unless done $ do
-    ins <- rtraverse (evalNode tape) inputs
+    ins <- rtraverse evalNode' inputs
+    unless (rnull ins) $ writeIORef output (forward ins)
+    writeIORef updated True
+  readIORef output
+
+evalNode node = getIdentity <$> evalNode' node
+
+type Tape = [Some Node]
+
+evalNodeTape :: IORef Tape -> Node output -> IO (Identity output)
+evalNodeTape tape node@Node{..} = do
+  done <- readIORef updated
+  unless done $ do
+    ins <- rtraverse (evalNodeTape tape) inputs
     unless (rnull ins) $ writeIORef output (forward ins)
     modifyIORef tape (Some node :)
     writeIORef updated True
@@ -133,7 +141,7 @@ testGrad = do
   
   tape <- newIORef []
   resetNode loss
-  error <- evalNode tape loss
+  error <- evalNodeTape tape loss
   print error
   
   print =<< length <$> readIORef tape
