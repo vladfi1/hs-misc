@@ -30,6 +30,7 @@ import DAGIO
 import Random
 import List
 
+import Control.Monad
 import Data.IORef
 
 chars = [' ' .. '~']
@@ -141,14 +142,16 @@ main = do
   let Right parsed = parser compilationUnit java
   
   loss <- runAnyAutoEncoder autoEncoder parsed
-  setLearningRate (-0.1) loss
-
-  tape <- newIORef []
   
-  resetNode loss
-  evalNode tape loss
-  backprop <$> readIORef tape
-  traverse learn params
+  let train = do
+      tape <- newIORef []
+      resetNode loss
+      error <- evalNode tape loss
+      print error
+      
+      setLearningRate (-0.001) loss
+      backprop =<< readIORef tape
+      traverse learn params
   
-  print $ length params
+  forever train
 

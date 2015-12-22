@@ -34,7 +34,7 @@ data Some f where
 deriving instance Num a => Num (Identity a)
 
 data Node (output :: *) where
-  Node :: Num output =>
+  Node :: (Num output) =>
     { forward :: HList inputs -> Identity output
     , inputs :: Rec Node inputs
     , output :: IORef (Identity output)
@@ -43,7 +43,7 @@ data Node (output :: *) where
     , gradOutput :: IORef (Identity output)
     } -> Node output
 
-makeSource :: Num a => a -> IO (Node a)
+makeSource :: (Num a) => a -> IO (Node a)
 makeSource a = do
   output' <- newIORef (Identity a)
   updated' <- newIORef True
@@ -61,15 +61,15 @@ instance (Num a, Default a) => DefaultM IO (Node a) where
     defM = makeSource def
 
 -- these types are somewhat less general than would be ideal
-makeUnary :: Floating a => (forall b. Floating b => b -> b) -> Node a -> IO (Node a)
+makeUnary :: (Floating a) => (forall b. Floating b => b -> b) -> Node a -> IO (Node a)
 makeUnary f = makeNode (uncurry1 f, \inputs output -> (output * uncurry1 (diff f) inputs) :& RNil)
 
-makeBinary :: Num a => (forall b. Num b => b -> b -> b) -> Node a -> Node a -> IO (Node a)
+makeBinary :: (Num a) => (forall b. Num b => b -> b -> b) -> Node a -> Node a -> IO (Node a)
 makeBinary f = makeNode (uncurry2 f, g) where
   g (x :& y :& RNil) output = dx :& dy :& RNil
     where [dx, dy] = map (output *) $ grad (\[a, b] -> f a b) [x, y]
 
-makeNode :: Num output => Curry Node inputs (IO (Node output)) c => (HList inputs -> Identity output, HList inputs -> Identity output -> HList inputs) -> c
+makeNode :: (Num output) => Curry Node inputs (IO (Node output)) c => (HList inputs -> Identity output, HList inputs -> Identity output -> HList inputs) -> c
 makeNode (f, b) = curry g where
   g inputs' = do
     ins <- rtraverse readNode inputs'
@@ -106,7 +106,7 @@ evalNode tape node@Node{..} = do
   done <- readIORef updated
   unless done $ do
     ins <- rtraverse (evalNode tape) inputs
-    writeIORef output (forward ins)
+    unless (rnull ins) $ writeIORef output (forward ins)
     modifyIORef tape (Some node :)
     writeIORef updated True
   readIORef output
@@ -124,7 +124,26 @@ setLearningRate rate Node{..} = writeIORef gradOutput (Identity rate)
 
 learn (Some Node{..}) = do
   grad <- readIORef gradOutput
-  writeIORef output grad
+  modifyIORef output (grad+)
+
+
+testGrad = do
+  param <- makeSource 0
+  loss <- makeUnary id param
+  
+  tape <- newIORef []
+  resetNode loss
+  error <- evalNode tape loss
+  print error
+  
+  print =<< length <$> readIORef tape
+  
+  setLearningRate (-0.1) loss
+  backprop =<< readIORef tape
+  
+  g <- readIORef $ gradOutput param
+  print g
+
 
 {- pull-based backprop scrapped in favor of tape version
 resetGrad :: Node output -> IO ()

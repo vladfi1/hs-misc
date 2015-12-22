@@ -249,7 +249,7 @@ autoDecodeRec autoDecoders Dict (DecodeParams aff params) = AutoDecoder f where
     let i = ns2int (unSOP children)
     
     prob <- makeSelect i node
-    log_prob <- makeUnary log prob
+    log_score <- makeUnary (negate . log) prob
     
     let childReprs = liftA_SOP getRepr children
     let decodings = cliftA_POP (Proxy::Proxy (KnownSize s)) (Comp . flip affineIn parent) params
@@ -265,7 +265,7 @@ autoDecodeRec autoDecoders Dict (DecodeParams aff params) = AutoDecoder f where
     
     childNodes <- collapse_SOP <$> sequence_SOP' (ap_SOP autoDecoders' children)
     
-    foldM (makeBinary (+)) log_prob (childNodes ++ norms)
+    foldM (makeBinary (+)) log_score (norms ++ childNodes)
 
 primAutoDecoder :: Num a => AutoDecoder a s t
 primAutoDecoder = AutoDecoder f where
