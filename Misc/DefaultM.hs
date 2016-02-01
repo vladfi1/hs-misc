@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module DefaultM where
+module Misc.DefaultM where
 
 class DefaultM m a where
   defM :: m a
