@@ -23,6 +23,7 @@ library
                        Misc.Utils
                        Misc.Random
                        Misc.DefaultM
+                       Misc.VarArgs
   -- other-modules:       
   -- other-extensions:    
   build-depends: base >=4.8 && <4.9

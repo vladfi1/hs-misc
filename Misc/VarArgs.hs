@@ -3,11 +3,11 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
 
-module VarArgs where
+module Misc.VarArgs where
 
 import Data.Vinyl
 import Data.Vinyl.Functor
-import Nats
+import Misc.Nats
 
 import Prelude hiding (curry, uncurry)
 
