@@ -15,7 +15,7 @@ import Generics.SOP.BasicFunctors
 import Generics.SOP.Sing
 import Generics.SOP.Constraint
 
-import Constraints
+import Misc.Constraints
 
 import Data.Proxy
 import Data.Default

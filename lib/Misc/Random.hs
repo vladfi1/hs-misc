@@ -30,8 +30,8 @@ import qualified Algebra.Module as Module
 import qualified Algebra.Field as Field
 import qualified Prelude
 
-import MonadJoin
-import Tree
+import Misc.MonadJoin
+import Misc.Tree
 
 class (Field.C w, Monad m) => MonadDiscrete w m | m -> w where
   sample :: [(a, w)] -> m a
