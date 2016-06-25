@@ -9,6 +9,7 @@ import Data.Functor.Compose
 import Control.Lens
 import Physics
 import Graphics.Gloss
+import RL
 
 data Variables a = Variables {
   _x :: a, -- position of cart
@@ -80,12 +81,14 @@ displayMode = InWindow "Inverted Pendulum" (400, 200) (50, 50)
 --step :: Floating a => Constants a
 step constants dt world@(model, controls) = (integrate dt model (dynamics constants world), controls)
 
+episode 
+
 --main = simulate displayMode white 60 initialVariables (toPicture defaultConstants) iter
 
 --handleEvent (EventKey (SpecialKey KeyLeft) 
 --handleEvent _ world = world
 
-reward (Compose (Pair (Vairables x theta) _)) = cos theta - sq x
+reward (Compose (Pair (Variables x theta) (Controls f))) = cos theta - sq x - sq f
 
 main = play displayMode white 60 (initialModel, nullControls) (toPicture defaultConstants) (const id) (step defaultConstants)
 
