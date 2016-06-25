@@ -3,7 +3,10 @@
 module ListProofs where
 
 import Data.Singletons.Prelude
+import Data.Type.Equality
+import FunctionProofs
 
+{-
 data MapP f l r where
   MapNil :: MapP f '[] '[]
   MapCons :: MapP f as bs -> MapP f (a ': as) (Apply f a ': bs)
@@ -36,12 +39,37 @@ data ZipperP s l r where
 
 type ReverseP = ZipperP '[]
 
-{-
-reverseReflexive :: Zippererse l r -> Reverse r l
-reverseReflexive RevNil = RevNil
-reverseReflexive (RevCons p) =
--}
+z2 :: SList r -> ZipperP s l r -> ReverseP l l' -> ConcatP s l' r
+z2 r ZipperNil ZipperNil = concatNil r
+--z2 r (ZipperCons p1) (ZipperCons p2) = FoldRCons _
+
+--z1 :: ZipperP s l r -> ZipperP l s r' -> ReverseP r r'
+--z1 ZipperNil ZipperNil = 
+
+reverseReflexive :: ReverseP l r -> ReverseP r l
+reverseReflexive ZipperNil = ZipperNil
+reverseReflexive (ZipperCons p) =
 
 data Length (l :: [k]) where
   LZero :: Length '[]
   LSucc :: Length l -> Length (a ': l)
+
+-}
+
+appendNil :: SList l -> (l :~: l :++ '[])
+appendNil SNil = Refl
+appendNil (SCons _ l) = case appendNil l of Refl -> Refl
+
+appendCommutative :: Commutative (:++$)
+appendCommutative = Commutative f where
+  f :: Sing a -> Sing b -> a :++ b :~: b :++ a
+  f SNil b = appendNil b
+
+blah :: Associative (:++$)
+blah = Associative f where
+  f :: Sing a -> Sing b -> Sing c -> (a :++ b) :++ c :~: a :++ (b :++ c)
+
+  f SNil _ _ = Refl
+  f (SCons _ a) b c = case f a b c of Refl -> Refl
+
+
